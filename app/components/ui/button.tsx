@@ -1,0 +1,74 @@
+import * as React from "react";
+
+import { cn } from "../../lib/utils";
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?:
+    | "default"
+    | "outline"
+    | "secondary"
+    | "ghost"
+    | "destructive";
+  size?: "default" | "sm" | "lg" | "icon";
+}
+
+const Button = React.forwardRef<
+  HTMLButtonElement,
+  ButtonProps
+>(
+  (
+    {
+      className,
+      variant = "default",
+      size = "default",
+      type = "button",
+      ...props
+    },
+    ref
+  ) => {
+    return (
+      <button
+        ref={ref}
+        type={type}
+        className={cn(
+          "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9] disabled:pointer-events-none disabled:opacity-50",
+
+          variant === "default" &&
+            "bg-[#6D28D9] text-white hover:bg-[#5B21B6]",
+
+          variant === "outline" &&
+            "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
+
+          variant === "secondary" &&
+            "bg-slate-100 text-slate-900 hover:bg-slate-200",
+
+          variant === "ghost" &&
+            "bg-transparent hover:bg-slate-100",
+
+          variant === "destructive" &&
+            "bg-red-600 text-white hover:bg-red-700",
+
+          size === "default" &&
+            "h-10 px-4 py-2",
+
+          size === "sm" &&
+            "h-9 rounded-md px-3",
+
+          size === "lg" &&
+            "h-11 rounded-md px-8",
+
+          size === "icon" &&
+            "h-10 w-10",
+
+          className
+        )}
+        {...props}
+      />
+    );
+  }
+);
+
+Button.displayName = "Button";
+
+export { Button };

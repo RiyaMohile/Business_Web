@@ -17,6 +17,12 @@ interface AddressForm {
   name: string;
   street: string;
   area: string;
+
+  city: string;
+  state: string;
+  country: string;
+  pinCode: string;
+
   latitude: string;
   longitude: string;
   isPrimary: boolean;
@@ -29,6 +35,12 @@ const INITIAL_ADDRESS: AddressForm = {
   name: "",
   street: "",
   area: "",
+
+  city: "",
+  state: "",
+  country: "",
+  pinCode: "",
+
   latitude: "",
   longitude: "",
   isPrimary: true,
@@ -135,16 +147,21 @@ export default function AddressModal({
           );
 
           setAddress((previous) => ({
-            ...previous,
+  ...previous,
 
-            latitude: String(latitude),
-            longitude: String(longitude),
+  latitude: String(latitude),
+  longitude: String(longitude),
 
-            area:
-              previous.area ||
-              data?.locality ||
-              city,
-          }));
+  city,
+  state,
+  country,
+  pinCode,
+
+  area:
+    previous.area ||
+    data?.locality ||
+    city,
+}));
 
           alert(
             "Location detected successfully."
@@ -238,21 +255,20 @@ export default function AddressModal({
       }
 
       const payload = {
-        name: address.name.trim(),
-        street: address.street.trim(),
-        area: address.area.trim(),
+  name: address.name.trim(),
+  street: address.street.trim(),
+  area: address.area.trim(),
 
-        latitude: Number(
-          address.latitude
-        ),
+  city: address.city.trim(),
+  state: address.state.trim(),
+  country: address.country.trim(),
+  pinCode: address.pinCode.trim(),
 
-        longitude: Number(
-          address.longitude
-        ),
+  latitude: Number(address.latitude),
+  longitude: Number(address.longitude),
 
-        isPrimary:
-          address.isPrimary,
-      };
+  isPrimary: address.isPrimary,
+};
 
       console.log(
         "CREATE ADDRESS PAYLOAD:",

@@ -42,6 +42,11 @@ export interface Product {
   color?: string;
 
   totalStock?: number;
+    inventory?: {
+    size: string;
+    stock: number;
+    lastUpdated?: string;
+  }[];
 
   tags?: string[];
 
@@ -259,6 +264,12 @@ export interface ProductDetail {
 
   totalStock?: number;
 
+    inventory?: {
+    size: string;
+    stock: number;
+    lastUpdated?: string;
+  }[];
+
   tags?: string[];
 
   area?: string;
@@ -286,6 +297,15 @@ export interface ProductDetailResponse {
   success: boolean;
   message: string;
   data: ProductDetail;
+}
+
+export interface NewArrivalResponse {
+  success: boolean;
+  currentPage: number;
+  totalPages: number;
+  totalPosts: number;
+  customerAddressId: string;
+  data: Product[];
 }
 
 // ==========================================
@@ -328,6 +348,40 @@ export const getProductById = async (
     throw new Error(
       data?.message ||
         "Unable to load product."
+    );
+  }
+
+  return data;
+};
+
+export const getNewArrivalProducts = async (
+  customerAddressId: string,
+  page = 1,
+  limit = 20
+): Promise<NewArrivalResponse> => {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    throw new Error("Authentication token not found.");
+  }
+
+  const { data } = await axios.get(
+    `${BASE_URL}/post/new-arrivals`,
+    {
+      params: {
+        customerAddressId,
+        page,
+        limit,
+      },
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (!data?.success) {
+    throw new Error(
+      data?.message || "Unable to load new arrival products."
     );
   }
 

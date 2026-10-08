@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 
 import AddressModal from "../../components/address/AddressModal";
 import {
-  getTrendingProducts,
+  getNewArrivalProducts,
   searchProducts,
   Product, 
 } from "../../services/productApi";
@@ -206,23 +206,21 @@ setAddressId(selectedAddress._id);
       setLoading(true);
       setError("");
 
-      const response =
-        await getTrendingProducts(
-          customerAddressId,
-          1,
-          20
-        );
+      const response = await getNewArrivalProducts(
+  customerAddressId,
+  1,
+  50
+);
 
       console.log(
         "PRODUCT RESPONSE:",
         response
       );
 
-      const trendingProducts = (response?.data || [])
-  .map((item: any) => item?.post)
+      const newArrivalProducts = (response?.data || [])
   .filter((post: any) => post?._id);
 
-setProducts(trendingProducts);
+setProducts(newArrivalProducts);
     } catch (error: any) {
       console.error(
         "GET PRODUCTS ERROR:",
@@ -389,8 +387,8 @@ setProducts(trendingProducts);
             </h1>
 
             <p className="mt-1 text-sm text-slate-500">
-              Trending products near you
-            </p>
+  New arrivals near you
+</p>
 
           </div>
 

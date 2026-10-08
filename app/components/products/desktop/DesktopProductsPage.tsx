@@ -8,88 +8,19 @@ import {
   Loader2,
   ShoppingCart,
   Heart,
-  Grid2X2,
-  ShoppingBasket,
-  Shirt,
-  Smartphone,
-  House,
-  Sparkles,
-  Gamepad2,
-  Baby,
-  Trophy,
-  BookOpen,
-  Car,
-  Menu,
+
 } from "lucide-react";
 
 import {
-  getTrendingProducts,
+  getNewArrivalProducts,
   searchProducts,
   Product,
 } from "../../../services/productApi";
 
 
 import AddressModal from "../../address/AddressModal";
-import DesktopHeader from "../DesktopHeader";
 import Navbar from "../../Navbar";
-// ======================================================
-// CATEGORY TYPE
-// ======================================================
 
-const categories = [
-  {
-    label: "All Products",
-    icon: Grid2X2,
-  },
-  {
-    label: "Groceries",
-    icon: ShoppingBasket,
-  },
-  {
-    label: "Fashion",
-    icon: Shirt,
-  },
-  {
-    label: "Electronics",
-    icon: Smartphone,
-  },
-  {
-    label: "Home & Living",
-    icon: House,
-  },
-  {
-    label: "Beauty",
-    icon: Sparkles,
-  },
-  {
-    label: "Toys",
-    icon: Gamepad2,
-  },
-  {
-    label: "Baby & Kids",
-    icon: Baby,
-  },
-  {
-    label: "Sports",
-    icon: Trophy,
-  },
-  {
-    label: "Books & Stationery",
-    icon: BookOpen,
-  },
-  {
-    label: "Automotive",
-    icon: Car,
-  },
-  {
-    label: "Health & Wellness",
-    icon: Heart,
-  },
-  {
-    label: "More Categories",
-    icon: Menu,
-  },
-];
 
 
 // ======================================================
@@ -337,11 +268,11 @@ if (
       setError("");
 
       const response =
-        await getTrendingProducts(
-          customerAddressId,
-          1,
-          20
-        );
+  await getNewArrivalProducts(
+    customerAddressId,
+    1,
+    50
+  );
 
 
       // ----------------------------------------------
@@ -356,21 +287,12 @@ if (
       // }
       // ----------------------------------------------
 
-      const trendingProducts =
-        (response?.data || [])
-          .map(
-            (item: any) =>
-              item?.post
-          )
-          .filter(
-            (post: any) =>
-              post?._id
-          );
+      const newArrivalProducts =
+  (response?.data || []).filter(
+    (post: any) => post?._id
+  );
 
-
-      setProducts(
-        trendingProducts
-      );
+setProducts(newArrivalProducts);
 
     } catch (error: any) {
       console.error(
@@ -567,8 +489,8 @@ if (
               </h1>
 
               <p className="mt-1 text-[19px] text-[#5F7197]">
-                Trending products near you
-              </p>
+  New arrivals near you
+</p>
 
             </div>
 

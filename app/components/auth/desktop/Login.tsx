@@ -1,89 +1,70 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
 import {
-  LockKeyhole,
+  ArrowRight,
+  Smartphone,
+  UserPlus,
+  ChevronDown,
 } from "lucide-react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
 
-import { Button } from "../../ui/button";
-import { Input } from "../../ui/input";
+import { sendLoginOTP } from "../../../services/authApi";
+import { registerDevice } from "../../../services/deviceApi";
 import AlertBox from "../../common/AlertBox";
-import { useAlert } from "../../../hooks/useAlert";
 
-import {
-  registerDevice,
-} from "../../../services/deviceApi";
-
-export default function LoginForm() {
-  const {
-    alert,
-    showAlert,
-    closeAlert,
-  } = useAlert();
-
+export default function Login() {
   const router = useRouter();
 
-  const [checkingAuth, setCheckingAuth] =
-    useState(true);
+  const [mobile, setMobile] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [comingSoonModal, setComingSoonModal] = useState(false);
 
-  const [username, setUsername] =
-    useState("");
+  const [alert, setAlert] = useState({
+    open: false,
+    title: "",
+    message: "",
+    type: "info" as
+      | "success"
+      | "error"
+      | "warning"
+      | "info",
+  });
 
-  const [password, setPassword] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(false);
-
-  /* ==========================================
-     CHECK EXISTING LOGIN
-  ========================================== */
-
-  useEffect(() => {
-    const checkExistingLogin = () => {
-      try {
-        const token =
-          localStorage.getItem("token");
-
-        if (token) {
-          router.replace("/products");
-          return;
-        }
-
-        setCheckingAuth(false);
-      } catch (error) {
-        console.error(
-          "AUTH CHECK ERROR:",
-          error
-        );
-
-        setCheckingAuth(false);
-      }
-    };
-
-    checkExistingLogin();
-  }, [router]);
-
-  /* ==========================================
-     USERNAME CHANGE
-  ========================================== */
-
-  const handleUsernameChange = (
-    e: React.ChangeEvent<HTMLInputElement>
+  const showAlert = (
+    message: string,
+    type:
+      | "success"
+      | "error"
+      | "warning"
+      | "info" = "info",
+    title = ""
   ) => {
-    setUsername(e.target.value);
+    setAlert({
+      open: true,
+      title,
+      message,
+      type,
+    });
   };
 
+  const handleComingSoon = () => {
+  setComingSoonModal(true);
+};
   /* ==========================================
-     PASSWORD CHANGE
+     MOBILE CHANGE
   ========================================== */
 
-  const handlePasswordChange = (
+  const handleMobileChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    setPassword(e.target.value);
+    const value = e.target.value.replace(/\D/g, "");
+
+    if (value.length <= 10) {
+      setMobile(value);
+    }
   };
 
   /* ==========================================
@@ -91,18 +72,24 @@ export default function LoginForm() {
   ========================================== */
 
   const handleLogin = async () => {
-    if (!username.trim()) {
+    // ========================================
+    // VALIDATION
+    // ========================================
+
+    if (!mobile.trim()) {
       showAlert(
-        "Please enter your username.",
-        "warning"
+        "Please enter your phone number.",
+        "warning",
+        "Phone Number Required"
       );
       return;
     }
 
-    if (!password) {
+    if (mobile.length !== 10) {
       showAlert(
-        "Please enter your password.",
-        "warning"
+        "Please enter a valid 10 digit phone number.",
+        "warning",
+        "Invalid Phone Number"
       );
       return;
     }
@@ -110,37 +97,34 @@ export default function LoginForm() {
     try {
       setLoading(true);
 
-      /* ========================================
-         GET DEVICE ID
-      ======================================== */
+      // ========================================
+      // DEVICE ID
+      // ========================================
 
-      let deviceId =
-        localStorage.getItem("deviceId");
+     let deviceId = localStorage.getItem("deviceId");
 
-      /* ========================================
-         REGISTER DEVICE IF NOT EXISTS
-      ======================================== */
+if (!deviceId) {
+  const deviceResponse = await registerDevice();
 
-      if (!deviceId) {
-  const deviceResponse =
-    await registerDevice();
-
-  const newDeviceId =
-    deviceResponse?.device?.deviceId;
+  console.log(
+    "DEVICE REGISTRATION RESPONSE:",
+    deviceResponse
+  );
 
   if (
     !deviceResponse?.status ||
-    !newDeviceId
+    !deviceResponse?.device?.deviceId
   ) {
-    showAlert(
-      "Unable to register device.",
-      "error"
-    );
-    return;
+    throw new Error("Unable to register device.");
   }
 
+  // New device ID is definitely a string here
+  const newDeviceId = deviceResponse.device.deviceId;
+
+  // Update variable for further use
   deviceId = newDeviceId;
 
+  // Save string in localStorage
   localStorage.setItem(
     "deviceId",
     newDeviceId
@@ -152,389 +136,318 @@ export default function LoginForm() {
   );
 }
 
-      /* ========================================
-         LOGIN API
-      ======================================== */
+      // ========================================
+      // PHONE NUMBER
+      // ========================================
 
-      const response = await axios.post(
-        "https://api.thover.in/v1/api/auth/login",
-        {
-          username: username.trim(),
-          password,
+      const mobileNumber =
+        `91${mobile}`;
 
-          // Current device ID
-          deviceId,
+      // ========================================
+      // SEND LOGIN OTP
+      // ========================================
 
-          // Application platform
-          platform: "customer",
-
-          // Actual device type
-          deviceType: "web",
-
-          deviceName:
-            typeof navigator !== "undefined"
-              ? navigator.userAgent
-              : "Web Browser",
-
-          appVersion:
-            process.env.NEXT_PUBLIC_APP_VERSION ||
-            "1.0.0",
-        }
-      );
+      const response =
+        await sendLoginOTP(
+          mobileNumber
+        );
 
       console.log(
-        "LOGIN RESPONSE:",
-        response.data
+        "LOGIN OTP RESPONSE:",
+        response
       );
 
-      /* ========================================
-         CHECK LOGIN RESPONSE
-      ======================================== */
+      // ========================================
+      // CHECK RESPONSE
+      // ========================================
 
-      if (!response.data?.success) {
-        showAlert(
-          response.data?.message ||
-            "Login failed.",
-          "error"
+      if (!response?.success) {
+        throw new Error(
+          response?.message ||
+            "Unable to send OTP."
         );
-
-        return;
       }
 
-      /* ========================================
-         GET TOKEN
-      ======================================== */
-
-      const token =
-        response.data?.token;
-
-      const userId =
-        response.data?.userId;
-
-      if (!token) {
-        showAlert(
-          "Login token was not received.",
-          "error"
+      if (!response?.requestId) {
+        throw new Error(
+          "OTP request ID was not received."
         );
-
-        return;
       }
 
-      /* ========================================
-         SAVE TOKEN
-      ======================================== */
+      // ========================================
+      // SAVE OTP DATA
+      // ========================================
 
-      localStorage.setItem(
-        "token",
-        token
+      sessionStorage.setItem(
+        "requestId",
+        response.requestId
       );
 
-      /* ========================================
-         SAVE USER ID
-      ======================================== */
+      sessionStorage.setItem(
+        "mobile",
+        mobileNumber
+      );
 
-      if (userId) {
-        localStorage.setItem(
-          "userId",
-          userId
-        );
-      }
+      sessionStorage.setItem(
+        "otpType",
+        "login"
+      );
 
-      /* ========================================
-         SAVE USER DATA IF RETURNED
-      ======================================== */
-
-      if (response.data?.user) {
-        localStorage.setItem(
-          "user",
-          JSON.stringify(
-            response.data.user
-          )
-        );
-      }
-
-      /* ========================================
-         SUCCESS
-      ======================================== */
+      // ========================================
+      // SUCCESS
+      // ========================================
 
       showAlert(
-        "Login successful.",
-        "success"
+        "OTP has been sent to your phone.",
+        "success",
+        "OTP Sent"
       );
 
-      /* ========================================
-         REDIRECT
-      ======================================== */
+      // ========================================
+      // GO TO OTP PAGE
+      // ========================================
 
-      router.replace("/products");
+      router.push("/otp");
 
     } catch (error: any) {
       console.error(
         "LOGIN ERROR:",
         error?.response?.data ||
-          error?.message ||
           error
       );
 
       showAlert(
         error?.response?.data?.message ||
-          "Invalid username or password.",
-        "error"
+          error?.message ||
+          "Something went wrong. Please try again.",
+        "error",
+        "Login Failed"
       );
+
     } finally {
       setLoading(false);
     }
   };
 
-  /* ==========================================
-     AUTH CHECK SCREEN
-  ========================================== */
-
-  if (checkingAuth) {
-    return (
-      <main className="flex min-h-[100dvh] items-center justify-center bg-gradient-to-br from-[#f7f4ff] via-white to-[#eee8ff]">
-        <div className="text-sm font-medium text-[#6D28D9]">
-          Loading...
-        </div>
-      </main>
-    );
-  }
-
-  /* ==========================================
-     LOGIN UI
-  ========================================== */
-
   return (
-    <main className="min-h-[100dvh] w-full ">
+  <>
+    <div className="h-full w-full">
 
-      <div className="flex min-h-[100dvh] w-full items-center justify-center">
+      {/* ================= LOGIN CONTENT ================= */}
 
-        <div
+      <div className="flex h-full flex-col">
+
+        <div className="text-center">
+  <h1 className="text-[38px] font-bold leading-tight tracking-[-0.03em] text-[#101828]">
+    Welcome{" "}
+    <span className="text-[#6D28D9]">
+      Back
+    </span>
+  </h1>
+
+  <p className="mt-2 text-[17px] text-[#98A2B3]">
+    Login with your phone number to continue
+  </p>
+</div>
+
+        {/* ================= PHONE ================= */}
+
+        <div className="mt-7">
+
+          <div className="flex h-\[54px] overflow-hidden rounded-\[13px]  bg-white">
+
+            <div className="flex w-\[55px] shrink-0 items-center justify-center">
+              <Smartphone className="h-6 w-6 text-\[#6D28D9]" />
+            </div>
+
+            <button
+              type="button"
+              className="flex w-[75px] shrink-0 items-center justify-center gap-2 border-r border-[#E5E0F5] text-[14px] font-semibold text-[#101828]"
+            >
+              +91
+
+              <ChevronDown className="h-4 w-4 text-slate-500" />
+            </button>
+
+            <input
+  type="tel"
+  inputMode="numeric"
+  value=""
+  readOnly
+  onClick={handleComingSoon}
+  placeholder="Enter your phone number"
+  className="min-w-0 flex-1 cursor-pointer bg-transparent px-4 text-[15px] text-slate-900 outline-none placeholder:text-[#A3AECA]"
+/>
+
+          </div>
+
+        </div>
+
+
+        {/* ================= LOGIN ================= */}
+
+        <button
+          type="button"
+           onClick={handleComingSoon}
+
           className="
+            mt-5
             flex
-            min-h-[100dvh]
+            h-[52px]
             w-full
-            flex-col
-            overflow-hidden
-            
+            items-center
+            justify-center
+            gap-3
+            rounded-[15px]
+            bg-gradient-to-r
+            from-[#7135E8]
+            to-[#6931D8]
+            text-[18px]
+            font-bold
+            text-white
+            shadow-[0_8px_20px_rgba(109,40,217,0.25)]
+            transition
+            hover:-translate-y-0.5
+            disabled:cursor-not-allowed
+            disabled:opacity-60
           "
         >
-
-          {/* =====================================
-              HEADER
-          ===================================== */}
-
-          <div
-            className="
-              relative
-              flex
-              shrink-0
-              flex-col
-              items-center
-              justify-center
-              overflow-hidden
-              mt-10
-            "
-          >
-
-    
-
-          </div>
+          {loading ? (
+            "Sending OTP..."
+          ) : (
+            <>
+              Login
+              <ArrowRight className="h-5 w-5" />
+            </>
+          )}
+        </button>
 
 
-          {/* =====================================
-              LOGIN CONTENT
-          ===================================== */}
+        {/* ================= DIVIDER ================= */}
 
-          <div
-            className="
-              flex
-              flex-1
-              flex-col
-              px-6
-              pb-8
-              sm:px-10
-            "
-          >
+        <div className="my-6 flex items-center gap-4">
 
-            {/* TITLE */}
+          <div className="h-px flex-1 bg-\[#DDD5F8]" />
 
-            <div className="text-center">
+          <span className="whitespace-nowrap text-\[14px] text-\[#7182A6]">
+            Don't have an account?
+          </span>
 
-              <h2
-                className="
-                  text-[26px]
-                  font-bold
-                  tracking-tight
-                  text-slate-900
-                "
-              >
-                Welcome 
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Login with your username and password
-              </p>
-
-            </div>
-
-
-            {/* =================================
-                USERNAME
-            ================================= */}
-
-            <div className="mt-8">
-
-              <Input
-                type="text"
-                value={username}
-                onChange={handleUsernameChange}
-                placeholder="Enter Username"
-                autoComplete="username"
-                disabled={loading}
-                className="
-                  h-14
-                  w-full
-                  rounded-2xl
-                  border
-                  border-slate-200
-                  bg-white
-                  px-4
-                  text-base
-                  shadow-none
-                  outline-none
-                  focus-visible:border-[#6D28D9]
-                  focus-visible:ring-4
-                  focus-visible:ring-[#6D28D9]/10
-                "
-              />
-
-            </div>
-
-
-            {/* =================================
-                PASSWORD
-            ================================= */}
-
-            <div className="mt-4">
-
-              <Input
-                type="password"
-                value={password}
-                onChange={handlePasswordChange}
-                placeholder="Enter Password"
-                autoComplete="current-password"
-                disabled={loading}
-                className="
-                  h-14
-                  w-full
-                  rounded-2xl
-                  border
-                  border-slate-200
-                  bg-white
-                  px-4
-                  text-base
-                  shadow-none
-                  outline-none
-                  focus-visible:border-[#6D28D9]
-                  focus-visible:ring-4
-                  focus-visible:ring-[#6D28D9]/10
-                "
-              />
-
-            </div>
-
-
-            {/* =================================
-                LOGIN BUTTON
-            ================================= */}
-
-            <Button
-              onClick={handleLogin}
-              disabled={
-                loading ||
-                !username.trim() ||
-                !password
-              }
-              className="
-                mt-5
-                h-14
-                w-full
-                rounded-xl
-                bg-gradient-to-r
-                from-[#7C3AED]
-                to-[#5B21B6]
-                text-base
-                font-semibold
-                text-white
-                shadow-[0_10px_25px_rgba(109,40,217,0.18)]
-                transition
-                hover:from-[#6D28D9]
-                hover:to-[#4C1D95]
-                disabled:opacity-50
-              "
-            >
-
-              {loading ? (
-                "Logging in..."
-              ) : (
-                <>
-                  <LockKeyhole className="mr-2 h-5 w-5" />
-                  Login
-                </>
-              )}
-
-            </Button>
-
-
-            {/* =================================
-                REGISTER
-            ================================= */}
-
-            {/* <div className="mt-9 text-center">
-
-              <p className="text-sm text-slate-500">
-                Don't have an account?
-              </p>
-
-              <button
-                type="button"
-                onClick={() =>
-                  router.push("/register")
-                }
-                className="
-                  mt-1
-                  text-base
-                  font-semibold
-                  text-[#6D28D9]
-                  transition
-                  hover:text-[#5B21B6]
-                "
-              >
-                Create Account
-              </button>
-
-            </div> */}
-
-          </div>
+          <div className="h-px flex-1 bg-\[#DDD5F8]" />
 
         </div>
+
+
+        {/* ================= SIGN UP ================= */}
+
+        <button
+  type="button"
+  onClick={handleComingSoon}
+  className="
+    mx-auto
+    flex
+    h-[46px]
+    w-[220px]
+    items-center
+    justify-center
+    gap-4
+    rounded-[14px]
+    border-2
+    border-[#B98BFF]
+    bg-white
+    text-[14px]
+    font-bold
+    text-[#6D28D9]
+    transition
+    hover:bg-[#FAF7FF]
+  "
+>
+  <UserPlus className="h-4 w-4" />
+
+  Sign Up
+
+  <ArrowRight className="h-4 w-4" />
+</button>
+
+
+        {/* ================= TERMS ================= */}
+
+        <p className="mt-6 text-center text-\[10px] text-\[#8B99B8]">
+
+          By continuing, you agree to our{" "}
+
+          <Link
+            href="/privacy-policy"
+            className="font-semibold text-[#6D28D9]"
+          >
+            Privacy Policy
+          </Link>
+
+          {" "}and{" "}
+
+          <Link
+            href="/terms-of-use"
+            className="font-semibold text-[#6D28D9]"
+          >
+            Terms of Use
+          </Link>
+
+          .
+
+        </p>
 
       </div>
 
 
-      {/* =====================================
-          ALERT
-      ===================================== */}
+      {/* ================= ALERT ================= */}
 
       <AlertBox
         open={alert.open}
         title={alert.title}
         message={alert.message}
         type={alert.type}
-        onClose={closeAlert}
+        onClose={() =>
+          setAlert((prev) => ({
+            ...prev,
+            open: false,
+          }))
+        }
       />
 
-    </main>
-  );
+
+{comingSoonModal && (
+  <div
+    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4"
+    onClick={() => setComingSoonModal(false)}
+  >
+    <div
+      className="w-full max-w-[380px] rounded-[24px] bg-white p-7 text-center shadow-2xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-\[#F3E8FF]">
+        <span className="text-3xl">🚀</span>
+      </div>
+
+      <h2 className="text-\[24px] font-bold text-\[#101828]">
+        Thover Coming Soon
+      </h2>
+
+      <p className="mt-2 text-\[14px] leading-6 text-\[#7182A6]">
+        We are working hard to bring this feature to you.
+        Stay tuned!
+      </p>
+
+      <button
+        type="button"
+        onClick={() => setComingSoonModal(false)}
+        className="mt-6 h-[46px] w-full rounded-[13px] bg-gradient-to-r from-[#7135E8] to-[#6931D8] text-[15px] font-bold text-white"
+      >
+        Okay
+      </button>
+    </div>
+  </div>
+)}
+    </div>
+  </>
+);
 }

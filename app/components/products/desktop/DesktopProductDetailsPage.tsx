@@ -69,6 +69,7 @@ export default function DesktopProductDetailsPage() {
 
   const [quantity, setQuantity] =
     useState(1);
+    const [addingToCart, setAddingToCart] = useState(false);
 
   const [liked, setLiked] =
     useState(false);
@@ -88,6 +89,7 @@ const [reviewSubmitting, setReviewSubmitting] =
   useState(false);
 
 const [reviewError, setReviewError] = useState("");
+const [comingSoonModal, setComingSoonModal] = useState(false);
 
 
   // ====================================================
@@ -472,25 +474,13 @@ const handleSubmitReview = async () => {
   // BUY NOW
   // ====================================================
 
-  const handleBuyNow =
-    () => {
-
-      console.log(
-        "BUY NOW",
-        {
-          postId:
-            product._id,
-          size:
-            selectedSize,
-          color:
-            selectedColor,
-          quantity,
-        }
-      );
-
-    };
+ const handleBuyNow = () => {
+  setComingSoonModal(true);
+};
 
     const handleAddToCart = async () => {
+  if (addingToCart) return;
+
   try {
     if (!product?._id) return;
 
@@ -501,18 +491,70 @@ const handleSubmitReview = async () => {
       return;
     }
 
-    // Create cart OR get existing cart
+    setAddingToCart(true);
+
+    // ==========================================
+    // SAVE STORE ID
+    // ==========================================
+
+    const existingStoreIds = JSON.parse(
+      localStorage.getItem("cartStoreIds") || "[]"
+    );
+
+    if (!existingStoreIds.includes(storeId)) {
+      existingStoreIds.push(storeId);
+
+      localStorage.setItem(
+        "cartStoreIds",
+        JSON.stringify(existingStoreIds)
+      );
+    }
+
+    localStorage.setItem("cartStoreId", storeId);
+
+    // ==========================================
+    // CREATE CART OR GET EXISTING CART
+    // ==========================================
+
     const cartResponse = await createCart(storeId);
 
     console.log("CREATE CART RESPONSE:", cartResponse);
 
-    const cartId = cartResponse?.cart?._id;
+    const cart = cartResponse?.cart;
+
+    const cartId = cart?._id;
 
     if (!cartId) {
       throw new Error("Cart ID not found");
     }
 
-    // Add product to cart
+    // ==========================================
+    // CHECK IF PRODUCT ALREADY EXISTS
+    // ==========================================
+
+    const alreadyAdded = Array.isArray(cart?.posts)
+      ? cart.posts.some((item: any) => {
+          const existingPostId =
+            item.postId?._id || item.postId;
+
+          return (
+            String(existingPostId) ===
+            String(product._id)
+          );
+        })
+      : false;
+
+    if (alreadyAdded) {
+      alert(
+        "This product is already in your cart. You can increase the quantity from the cart."
+      );
+      return;
+    }
+
+    // ==========================================
+    // ADD PRODUCT
+    // ==========================================
+
     const addResponse = await addPostToCart({
       cartId,
       postId: product._id,
@@ -527,6 +569,8 @@ const handleSubmitReview = async () => {
   } catch (error) {
     console.error("Add to cart error:", error);
     alert("Failed to add product to cart");
+  } finally {
+    setAddingToCart(false);
   }
 };
 
@@ -588,136 +632,137 @@ const handleSubmitReview = async () => {
         <section className="grid grid-cols-[1.08fr_0.92fr] gap-12">
 
 
+       
+
           {/* =================================================
-              LEFT IMAGE AREA
-          ================================================= */}
+    LEFT IMAGE AREA
+================================================= */}
 
-          <div className="grid grid-cols-[92px_1fr] gap-5">
+<div className="flex flex-col">
 
+  {/* MAIN IMAGE */}
+ <div className="relative h-[600px] w-[600px] overflow-hidden rounded-xl bg-[#F6F6F7]">
+    <img
+      src={productImages[selectedImage]}
+      alt={product.topic}
+      className="h-full w-full object-cover"
+    />
 
-            {/* THUMBNAILS */}
+    {/* LIKE */}
+    <button
+      type="button"
+      onClick={() => setLiked(!liked)}
+      className="
+        absolute
+        right-5
+        top-5
+        flex
+        h-12
+        w-12
+        items-center
+        justify-center
+        rounded-full
+        bg-white
+        shadow-md
+      "
+    >
+      <Heart
+        size={24}
+        className={
+          liked
+            ? "fill-red-500 text-red-500"
+            : "text-[#475467]"
+        }
+      />
+    </button>
 
-            <div className="flex flex-col gap-4">
+    {/* SHARE */}
+    <button
+      type="button"
+      onClick={handleShare}
+      className="
+        absolute
+        right-20
+        top-5
+        flex
+        h-12
+        w-12
+        items-center
+        justify-center
+        rounded-full
+        bg-white
+        shadow-md
+      "
+    >
+      <Share2
+        size={22}
+        className="text-[#475467]"
+      />
+    </button>
 
-              {productImages
-                .map(
-                  (
-                    image,
-                    index
-                  ) => (
-
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() =>
-                        setSelectedImage(
-                          index
-                        )
-                      }
-                      className={`
-                        relative
-                        h-[82px]
-                        w-[82px]
-                        overflow-hidden
-                        rounded-xl
-                        border-2
-                        bg-slate-50
-                        ${
-                          selectedImage ===
-                          index
-                            ? "border-[#6D28D9]"
-                            : "border-transparent"
-                        }
-                      `}
-                    >
-
-                      <img
-                        src={image}
-                        alt={`Product ${index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-
-                    </button>
-
-                  )
-                )}
-
-            </div>
-
-
-            {/* MAIN IMAGE */}
-
-            <div className="relative h-[520px] overflow-hidden rounded-xl bg-[#F6F6F7]">
-
-              <img
-                src={
-                  productImages[
-                    selectedImage
-                  ]
-                }
-                alt={
-                  product.topic
-                }
-                className="h-full w-full object-cover"
-              />
-
-
-              {/* LIKE */}
-
-              <button
-                type="button"
-                onClick={() =>
-                  setLiked(!liked)
-                }
-                className="absolute right-5 top-5 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md"
-              >
-
-                <Heart
-                  size={24}
-                  className={
-                    liked
-                      ? "fill-red-500 text-red-500"
-                      : "text-[#475467]"
-                  }
-                />
-
-              </button>
+    {/* FULLSCREEN */}
+    <button
+      type="button"
+      className="
+        absolute
+        bottom-5
+        right-5
+        flex
+        h-12
+        w-12
+        items-center
+        justify-center
+        rounded-full
+        bg-white
+        shadow-md
+      "
+    >
+      <Maximize2 size={20} />
+    </button>
+  </div>
 
 
-              {/* SHARE */}
+  {/* THUMBNAILS BELOW MAIN IMAGE */}
+  <div
+    className="
+      mt-4
+      flex
+      gap-4
+      overflow-x-auto
+      pb-2
+    "
+  >
+    {productImages.map((image, index) => (
+      <button
+        key={index}
+        type="button"
+        onClick={() => setSelectedImage(index)}
+        className={`
+          relative
+          h-[82px]
+          w-[82px]
+          shrink-0
+          overflow-hidden
+          rounded-xl
+          border-2
+          bg-slate-50
+          ${
+            selectedImage === index
+              ? "border-[#6D28D9]"
+              : "border-transparent"
+          }
+        `}
+      >
+        <img
+          src={image}
+          alt={`Product ${index + 1}`}
+          className="h-full w-full object-cover"
+        />
+      </button>
+    ))}
+  </div>
 
-              <button
-                type="button"
-                onClick={
-                  handleShare
-                }
-                className="absolute right-20 top-5 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md"
-              >
-
-                <Share2
-                  size={22}
-                  className="text-[#475467]"
-                />
-
-              </button>
-
-
-              {/* FULLSCREEN */}
-
-              <button
-                type="button"
-                className="absolute bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md"
-              >
-
-                <Maximize2
-                  size={20}
-                />
-
-              </button>
-
-            </div>
-
-          </div>
+</div>
 
 
           {/* =================================================
@@ -729,13 +774,22 @@ const handleSubmitReview = async () => {
 
             {/* STOCK */}
 
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#EFFAF3] px-3 py-1.5 text-xs font-semibold text-[#20A35A]">
+            <div className="mb-3 flex flex-wrap items-center gap-3">
 
-              <span className="h-2 w-2 rounded-full bg-[#20A35A]" />
+  {/* IN STOCK */}
+  <div className="inline-flex items-center gap-2 rounded-full bg-[#EFFAF3] px-3 py-1.5 text-xs font-semibold text-[#20A35A]">
+    <span className="h-2 w-2 rounded-full bg-[#20A35A]" />
+    In Stock
+  </div>
 
-              In Stock
+  {/* IDEAL FOR */}
+  {product.idealFor && (
+    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-[#475467]">
+      Ideal For: {product.idealFor}
+    </div>
+  )}
 
-            </div>
+</div>
 
 
             {/* PRODUCT NAME */}
@@ -909,59 +963,73 @@ const handleSubmitReview = async () => {
 
             <div className="grid grid-cols-4 divide-x divide-slate-200">
 
-              <DesktopFeature
-                icon={
-                  <ShieldCheck
-                    size={25}
-                  />
-                }
-                title="7 Days"
-                subtitle="Easy Returns"
-              />
+  <DesktopFeature
+    icon={
+      <ShieldCheck
+        size={25}
+      />
+    }
+    title="7 Days"
+    subtitle="Easy Returns"
+  />
 
-              <DesktopFeature
-                icon={
-                  <ShieldCheck
-                    size={25}
-                  />
-                }
-                title="Quality"
-                subtitle="Assured"
-              />
+  {/* Availability + City */}
+  <DesktopFeature
+    icon={
+      <ShieldCheck
+        size={25}
+      />
+    }
+    title="Availability"
+    subtitle={product.store?.address?.city || "N/A"}
+  />
 
-              <DesktopFeature
-                icon={
-                  <Truck
-                    size={25}
-                  />
-                }
-                title="Free Delivery"
-                subtitle="Orders above ₹499"
-              />
+  <DesktopFeature
+    icon={
+      <ShieldCheck
+        size={25}
+      />
+    }
+    title="Quality"
+    subtitle="Assured"
+  />
 
-              <DesktopFeature
-                icon={
-                  <ShieldCheck
-                    size={25}
-                  />
-                }
-                title="Secure"
-                subtitle="Payment"
-              />
+  <DesktopFeature
+    icon={
+      <ShieldCheck
+        size={25}
+      />
+    }
+    title="Secure"
+    subtitle="Payment"
+  />
 
-            </div>
+</div>
 
 
             {/* ACTIONS */}
 
             <div className="mt-7 flex gap-4">
   <button
-    type="button"
-    onClick={handleAddToCart}
-    className="flex-1 rounded-xl border border-black px-6 py-4 font-semibold"
-  >
+  type="button"
+  onClick={handleAddToCart}
+  disabled={addingToCart}
+  className="
+    flex-1
+    rounded-xl
+    border
+    border-black
+    px-6
+    py-4
+    font-semibold
+    transition
+    disabled:cursor-not-allowed
+    disabled:opacity-50
+  "
+>
     <ShoppingCart className="mr-2 inline-block h-5 w-5" />
-    Add to Cart
+
+{addingToCart ? "Adding..." : "Add to Cart"}
   </button>
 
   <button
@@ -1052,24 +1120,58 @@ const handleSubmitReview = async () => {
 
             <div className="mt-5 grid grid-cols-[1.5fr_0.8fr] gap-6">
 
-              <div className="rounded-xl border border-slate-100 bg-white p-6">
+              {/* PRODUCT DESCRIPTION */}
 
-                <h2 className="text-lg font-bold text-[#101828]">
-                  Product Description
-                </h2>
+{/* PRODUCT DESCRIPTION */}
 
-                <p className="mt-3 text-sm leading-6 text-[#5F7197]">
-                  {product.description || "No description available."}
-                </p>
+<div className="rounded-xl border border-slate-100 bg-white p-6">
 
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <InfoTag text="High Quality Material" />
-                  <InfoTag text="Stylish Design" />
-                  <InfoTag text="Lightweight" />
-                  <InfoTag text="Perfect for Gifting" />
-                </div>
+  {/* HEADING */}
+  <h2 className="text-lg font-bold text-[#101828]">
+    Product Description
+  </h2>
 
-              </div>
+  {/* DESCRIPTION */}
+  <p className="mt-4 text-sm leading-6 text-[#5F7197]">
+    {product.description || "No description available."}
+  </p>
+
+
+  {/* CATEGORY + TAGS */}
+<div className="mt-6 flex flex-wrap items-center gap-3">
+
+  {/* CATEGORY */}
+  {product.category && (
+    <div className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2.5 text-sm text-[#475467]">
+      <ShieldCheck
+        size={17}
+        className="text-[#6D28D9]"
+      />
+      <span>{product.category}</span>
+    </div>
+  )}
+
+  {/* TAGS */}
+  {product.tags &&
+    product.tags.length > 0 &&
+    product.tags.map(
+      (tag: string, index: number) => (
+        <div
+          key={`${tag}-${index}`}
+          className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2.5 text-sm text-[#475467]"
+        >
+          <ShieldCheck
+            size={17}
+            className="text-[#6D28D9]"
+          />
+          <span>{tag}</span>
+        </div>
+      )
+    )}
+
+</div>
+
+</div>
 
               <div className="rounded-xl border border-slate-100 bg-white p-6">
 
@@ -1437,7 +1539,54 @@ const handleSubmitReview = async () => {
     </div>
 
   </div>
-)}</main>
+
+  
+)}
+
+{comingSoonModal && (
+  <div
+    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4"
+    onClick={() => setComingSoonModal(false)}
+  >
+    <div
+      className="w-full max-w-[380px] rounded-[24px] bg-white p-7 text-center shadow-2xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#F3E8FF]">
+        <span className="text-3xl">🚀</span>
+      </div>
+
+      <h2 className="text-[24px] font-bold text-[#101828]">
+        Thover Coming Soon
+      </h2>
+
+      <p className="mt-2 text-[14px] leading-6 text-[#7182A6]">
+        We are working hard to bring Thover to you.
+        Stay tuned!
+      </p>
+
+      <button
+        type="button"
+        onClick={() => setComingSoonModal(false)}
+        className="
+          mt-6
+          h-[46px]
+          w-full
+          rounded-[13px]
+          bg-gradient-to-r
+          from-[#7135E8]
+          to-[#6931D8]
+          text-[15px]
+          font-bold
+          text-white
+        "
+      >
+        Okay
+      </button>
+    </div>
+  </div>
+)}
+</main>
   );
 }
 
@@ -1535,7 +1684,7 @@ function ReviewCard({
 // FEATURE
 // ======================================================
 
-function DesktopFeature({
+const DesktopFeature = ({
   icon,
   title,
   subtitle,
@@ -1543,32 +1692,18 @@ function DesktopFeature({
   icon: React.ReactNode;
   title: string;
   subtitle: string;
-}) {
-
-  return (
-
-    <div className="flex items-center gap-3 px-4 first:pl-0">
-
-      <div className="text-[#6D28D9]">
-        {icon}
-      </div>
-
-      <div>
-
-        <p className="text-sm font-semibold text-[#101828]">
-          {title}
-        </p>
-
-        <p className="mt-0.5 text-xs text-[#7182A6]">
-          {subtitle}
-        </p>
-
-      </div>
-
+}) => (
+  <div className="flex items-center gap-4 px-3 py-2">
+    <div className="shrink-0 text-[#6D28D9]">
+      {icon}
     </div>
 
-  );
-}
+    <div>
+      <p className="text-sm font-semibold text-[#101828]">{title}</p>
+      <p className="text-sm text-[#5F7197]">{subtitle}</p>
+    </div>
+  </div>
+);
 
 
 // ======================================================

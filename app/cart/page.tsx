@@ -2,8 +2,7 @@
 
 import {
   ArrowLeft,
-  Minus,
-  Plus,
+  ChevronDown,
   ShoppingBag,
   Trash2,
   Loader2,
@@ -36,8 +35,9 @@ interface Cart {
 export default function CartPage() {
   const router = useRouter();
 
-  const [cart, setCart] =
-    useState<Cart | null>(null);
+  const [carts, setCarts] = useState<Cart[]>([]);
+const [selectedStoreId, setSelectedStoreId] =
+  useState<string | null>(null);
 
   const [loading, setLoading] =
     useState(true);
@@ -53,28 +53,85 @@ export default function CartPage() {
   try {
     setLoading(true);
 
-    const response = await getMyCart();
-
-    console.log("FULL CART RESPONSE:", response);
-    console.log("CART:", response?.cart);
-    console.log("CART POSTS:", response?.cart?.posts);
-    console.log(
-      "CART POSTS LENGTH:",
-      response?.cart?.posts?.length
+    const storedStoreIds = JSON.parse(
+      localStorage.getItem("cartStoreIds") || "[]"
     );
 
-    if (response?.success && response?.cart) {
-      setCart({
-        ...response.cart,
-        posts: Array.isArray(response.cart.posts)
-          ? response.cart.posts
-          : [],
-      });
-    } else {
-      setCart(null);
+    if (
+      !Array.isArray(storedStoreIds) ||
+      storedStoreIds.length === 0
+    ) {
+      console.log("NO CART STORE IDS FOUND");
+
+      setCarts([]);
+      setSelectedStoreId(null);
+
+      return;
     }
+
+    console.log(
+      "CART STORE IDS:",
+      storedStoreIds
+    );
+
+    const responses = await Promise.all(
+      storedStoreIds.map(async (storeId: string) => {
+        try {
+          const response = await getMyCart(storeId);
+
+          console.log(
+            "CART RESPONSE:",
+            storeId,
+            response
+          );
+
+          return response?.cart || null;
+        } catch (error) {
+          console.error(
+            "STORE CART ERROR:",
+            storeId,
+            error
+          );
+
+          return null;
+        }
+      })
+    );
+
+    // Only carts having products
+    const validCarts = responses.filter(
+      (cart): cart is Cart =>
+        Boolean(
+          cart &&
+          Array.isArray(cart.posts) &&
+          cart.posts.length > 0
+        )
+    );
+
+    console.log(
+      "ALL STORE CARTS:",
+      validCarts
+    );
+
+    setCarts(validCarts);
+
+    // Select first store initially
+    if (validCarts.length > 0) {
+      setSelectedStoreId(
+        String(
+          validCarts[0].storeId?._id ||
+          validCarts[0].storeId
+        )
+      );
+    } else {
+      setSelectedStoreId(null);
+    }
+
   } catch (error: any) {
-    console.error("FETCH CART ERROR:", error);
+    console.error(
+      "FETCH CART ERROR:",
+      error
+    );
 
     if (
       error?.response?.status === 401 ||
@@ -82,83 +139,277 @@ export default function CartPage() {
     ) {
       router.push("/login");
     }
+
   } finally {
     setLoading(false);
   }
 };
 
-  useEffect(() => {
-    fetchCart();
-  }, []);
+ useEffect(() => {
+  fetchCart();
+}, []);
 
-  // ==========================================
-  // UPDATE QUANTITY
-  // ==========================================
+// ==========================================
+// SELECTED CART + TOTALS
+// ==========================================
 
-  const handleQuantityChange = async (
-    item: CartPost,
-    newQuantity: number
-  ) => {
-    if (!cart || newQuantity < 1) return;
+const selectedCart = carts.find(
+  (cart) =>
+    String(
+      cart.storeId?._id ||
+        cart.storeId
+    ) === selectedStoreId
+);
 
-    const postId =
-      item.postId?._id ||
-      item.postId;
+// Only selected store ke items
+const totalItems = selectedCart
+  ? selectedCart.posts.reduce(
+      (total, item) =>
+        total + Number(item.quantity || 0),
+      0
+    )
+  : 0;
 
-    try {
-      setActionLoading(postId);
+// Only selected store ka subtotal
+const totalSubtotal = selectedCart
+  ? Number(selectedCart.subtotal || 0)
+  : 0;
 
-      const response =
-        await updateCartPost({
-          cartId: cart._id,
-          postId,
-          quantity: newQuantity,
-          size: item.size,
-        });
+// ==========================================
+// UPDATE QUANTITY
+// ==========================================
 
-      if (response?.success) {
-        setCart(response.cart);
-      }
-    } catch (error) {
-      console.error(
-        "UPDATE CART ERROR:",
-        error
+const handleQuantityChange = async (
+  item: CartPost,
+  newQuantity: number
+) => {
+  if (!selectedCart || newQuantity < 1) return;
+
+  const postId =
+    item.postId?._id ||
+    item.postId;
+
+  try {
+    setActionLoading(postId);
+
+    const response = await updateCartPost({
+      cartId: selectedCart._id,
+      postId,
+      quantity: newQuantity,
+      size: item.size,
+    });
+
+    if (response?.success) {
+      setCarts((prev) =>
+        prev.map((cart) => {
+          if (cart._id !== selectedCart._id) {
+            return cart;
+          }
+
+          return {
+            ...cart,
+
+            // Backend se updated subtotal lo
+            subtotal: response.cart?.subtotal ?? cart.subtotal,
+
+            // Existing populated post data ko preserve karo
+            posts: cart.posts.map((cartItem) => {
+              const currentPostId =
+                cartItem.postId?._id ||
+                cartItem.postId;
+
+              if (String(currentPostId) !== String(postId)) {
+                return cartItem;
+              }
+
+              return {
+                ...cartItem,
+                quantity: newQuantity,
+              };
+            }),
+          };
+        })
       );
-    } finally {
-      setActionLoading(null);
     }
-  };
+  } catch (error) {
+    console.error(
+      "UPDATE CART ERROR:",
+      error
+    );
+  } finally {
+    setActionLoading(null);
+  }
+};
 
   // ==========================================
   // REMOVE
   // ==========================================
 
-  const handleRemove = async (
-    postId: string
-  ) => {
-    if (!cart) return;
+  const handleRemove = async (postId: string) => {
+  if (!selectedCart) return;
 
-    try {
-      setActionLoading(postId);
+  try {
+    setActionLoading(postId);
 
-      const response =
-        await removePostFromCart({
-          cartId: cart._id,
-          postId,
-        });
+    const response = await removePostFromCart({
+      cartId: selectedCart._id,
+      postId,
+    });
 
-      if (response?.success) {
-        setCart(response.cart);
-      }
-    } catch (error) {
-      console.error(
-        "REMOVE CART ERROR:",
-        error
-      );
-    } finally {
-      setActionLoading(null);
+    if (response?.success) {
+      setCarts((prev) => {
+        return prev
+          .map((cart) => {
+            if (cart._id !== selectedCart._id) {
+              return cart;
+            }
+
+            // Existing populated product data ko preserve karo
+            const updatedPosts = cart.posts.filter((cartItem) => {
+              const currentPostId =
+                cartItem.postId?._id ||
+                cartItem.postId;
+
+              return (
+                String(currentPostId) !== String(postId)
+              );
+            });
+
+            return {
+              ...cart,
+
+              // Sirf selected product remove hoga
+              posts: updatedPosts,
+
+              // Backend se updated subtotal
+              subtotal:
+                response.cart?.subtotal ??
+                cart.subtotal,
+            };
+          })
+          // Agar selected store ka cart empty ho gaya
+          // to store ko store list se hata do
+          .filter((cart) => cart.posts.length > 0);
+      });
+
+      // Agar selected store empty ho gaya hai
+      // to next available store select karo
+      setCarts((currentCarts) => {
+        if (currentCarts.length === 0) {
+          setSelectedStoreId(null);
+        } else {
+          const currentStoreStillExists =
+            currentCarts.some(
+              (cart) =>
+                String(
+                  cart.storeId?._id ||
+                    cart.storeId
+                ) === selectedStoreId
+            );
+
+          if (!currentStoreStillExists) {
+            setSelectedStoreId(
+              String(
+                currentCarts[0].storeId?._id ||
+                  currentCarts[0].storeId
+              )
+            );
+          }
+        }
+
+        return currentCarts;
+      });
     }
+  } catch (error) {
+    console.error("REMOVE CART ERROR:", error);
+  } finally {
+    setActionLoading(null);
+  }
+};
+
+const handleBuyAll = () => {
+  if (!selectedCart) {
+    alert("Please select a store.");
+    return;
+  }
+
+  if (!selectedCart.posts || selectedCart.posts.length === 0) {
+    alert("No products available in this store cart.");
+    return;
+  }
+
+  const storeId = String(
+    selectedCart.storeId?._id ||
+    selectedCart.storeId
+  );
+
+  const checkoutProducts = selectedCart.posts.map((item) => {
+    const post =
+      typeof item.postId === "object"
+        ? item.postId
+        : null;
+
+    const postId =
+      post?._id ||
+      item.postId;
+
+    return {
+      postId: String(postId),
+
+      topic:
+        post?.topic ||
+        post?.title ||
+        "Product",
+
+      image:
+        post?.media?.[0]?.mediaUrl ||
+        post?.image ||
+        post?.imageUrl ||
+        "",
+
+      quantity: Number(item.quantity || 1),
+
+      size: item.size || "",
+
+      price: Number(
+        post?.price?.amount || 0
+      ),
+
+      storeId,
+    };
+  });
+
+  if (checkoutProducts.length === 0) {
+    alert("No products available in cart.");
+    return;
+  }
+
+  const checkoutData = {
+    // IMPORTANT: selected store ka Mongo Cart _id
+    cartId: selectedCart._id,
+
+    // Sirf selected store ke products
+    products: checkoutProducts,
+
+    address: null,
+
+    deliveryCharge: 150,
+
+    storeId,
   };
+
+  localStorage.setItem(
+    "checkoutData",
+    JSON.stringify(checkoutData)
+  );
+
+  console.log(
+    "STORE CHECKOUT DATA:",
+    checkoutData
+  );
+
+  router.push("/checkout");
+};
 
   // ==========================================
   // LOADING
@@ -181,7 +432,7 @@ export default function CartPage() {
   // EMPTY CART
   // ==========================================
 
-  if (!cart || cart.posts.length === 0) {
+  if (carts.length === 0) {
     return (
       <main className="min-h-screen bg-[#FAF9FF] px-5 pb-10 pt-[140px] sm:px-8 lg:px-12">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-center rounded-3xl bg-white px-6 py-20 text-center shadow-sm">
@@ -227,368 +478,486 @@ export default function CartPage() {
   }
 
   // ==========================================
-  // CART
-  // ==========================================
+// CART
+// ==========================================
+
+return (
+  <main
+  className="
+    min-h-screen
+    bg-white
+    px-3
+    pb-[90px]
+    pt-5
+    sm:px-6
+    sm:pb-8
+    sm:pt-7
+    lg:px-10
+  "
+>
+    <div className="mx-auto max-w-[1100px]">
+
+      {/* ================= HEADER ================= */}
+
+<div className="mb-6 flex items-center gap-2 sm:mb-7 sm:gap-3">
+  <button
+    type="button"
+    onClick={() => router.back()}
+    className="
+      flex h-8 w-8 shrink-0
+      items-center justify-center
+      text-[#32106A]
+      transition hover:opacity-70
+      sm:h-9 sm:w-9
+    "
+  >
+    <ArrowLeft
+      size={24}
+      strokeWidth={2.5}
+      className="sm:h-6 sm:w-6"
+    />
+  </button>
+
+  <h1
+    className="
+      text-[28px]
+      font-bold
+      tracking-tight
+      text-[#32106A]
+      sm:text-[32px]
+    "
+  >
+    Thover
+  </h1>
+</div>
+
+      {/* ================= SELECT STORE ================= */}
+
+<div className="mb-6 sm:mb-7">
+
+  <div className="mb-3 flex items-center gap-2">
+    <ShoppingBag
+      size={22}
+      strokeWidth={2}
+      className="text-[#32106A] sm:h-6 sm:w-6"
+    />
+
+    <h2 className="text-[18px] font-bold text-[#32106A] sm:text-[20px]">
+      Select Store
+    </h2>
+  </div>
+
+  <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
+    {carts.map((cart) => {
+      const storeId = String(
+        cart.storeId?._id ||
+          cart.storeId
+      );
+
+      const storeName =
+        cart.storeId?.storeName ||
+        "Store";
+
+      const isSelected =
+        selectedStoreId === storeId;
+
+      return (
+        <button
+          key={storeId}
+          type="button"
+          onClick={() =>
+            setSelectedStoreId(storeId)
+          }
+          className={`
+  flex
+  min-w-[168px]
+  max-w-[190px]
+  items-center
+  justify-between
+  gap-2
+  rounded-lg
+  px-3
+  py-2.5
+  transition
+  sm:min-w-[180px]
+  sm:px-4
+  sm:py-3
+  ${
+    isSelected
+      ? "bg-gradient-to-r from-[#7135E8] to-[#6D28D9] text-white shadow-sm"
+      : "border border-[#DED7F5] bg-white text-[#32106A]"
+  }
+`}
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
+            <ShoppingBag
+              size={22}
+              strokeWidth={2}
+              className="shrink-0 sm:h-6 sm:w-6"
+            />
+
+            <span className="truncate text-[12px] font-semibold sm:text-[14px]">
+  {storeName}
+</span>
+          </div>
+
+          {isSelected && (
+            <span className="shrink-0 text-lg sm:text-xl">
+              →
+            </span>
+          )}
+        </button>
+      );
+    })}
+  </div>
+</div>
+
+      {/* ================= CART TITLE ================= */}
+
+      <div className="mb-4 sm:mb-5">
+  <h2 className="text-[20px] font-bold text-[#32106A] sm:text-[20px]">
+    Your Cart{" "}
+    <span className="text-[#32106A]">
+      ({totalItems} Items)
+    </span>
+  </h2>
+</div>
+      {/* ================= PRODUCTS ================= */}
+
+      <div className="space-y-2.5 sm:space-y-3">
+
+       {selectedCart?.posts.map((item, index) => {
+  const post =
+    typeof item.postId === "object"
+      ? item.postId
+      : null;
+
+  const postId =
+    post?._id ||
+    item.postId;
+
+  const image =
+    post?.media?.[0]?.mediaUrl ||
+    post?.image ||
+    post?.imageUrl ||
+    null;
+
+  const title =
+    post?.topic ||
+    post?.title ||
+    "Product";
+
+  const price = Number(
+    post?.price?.amount || 0
+  );
+
+  const itemTotal =
+    price * item.quantity;
+
+  const isLoading =
+    actionLoading === postId;
 
   return (
-    <main className="min-h-screen bg-[#FAF9FF] px-5 pb-12 pt-[140px] sm:px-8 lg:px-12">
-      <div className="mx-auto max-w-7xl">
+    <div
+      key={`${postId}-${item.size}-${index}`}
+      className="
+        relative
+        flex
+        gap-3
+        rounded-xl
+        border
+        border-[#DDD7F5]
+        bg-white
+        p-2.5
+        sm:gap-4
+        sm:p-3
+      "
+    >
+      {/* ================= IMAGE ================= */}
 
-        {/* HEADER */}
-
-        <div className="mb-8 flex items-center gap-4">
-          <button
-            onClick={() => router.back()}
+      <div
+        className="
+          flex
+          h-[86px]
+          w-[86px]
+          shrink-0
+          items-center
+          justify-center
+          overflow-hidden
+          rounded-lg
+          bg-[#F4F2F8]
+          sm:h-[100px]
+          sm:w-[100px]
+        "
+      >
+        {image ? (
+          <img
+            src={image}
+            alt={title}
             className="
-              flex
-              h-10
-              w-10
-              items-center
-              justify-center
-              rounded-full
+              h-full
+              w-full
+              object-cover
+            "
+          />
+        ) : (
+          <ShoppingBag
+            size={30}
+            className="text-[#A69ABF]"
+          />
+        )}
+      </div>
+
+      {/* ================= PRODUCT INFO ================= */}
+
+      <div
+        className="
+          min-w-0
+          flex-1
+          pr-6
+          sm:pr-8
+        "
+      >
+        {/* PRODUCT NAME */}
+
+        <h3
+          className="
+            truncate
+            text-[14px]
+            font-bold
+            text-[#32106A]
+            sm:text-[16px]
+          "
+        >
+          {title}
+        </h3>
+
+        {/* SIZE */}
+
+        <p
+          className="
+            mt-0.5
+            text-[11px]
+            text-[#8B82A6]
+            sm:mt-1
+            sm:text-[12px]
+          "
+        >
+          Size:{" "}
+          <span className="text-[#71669A]">
+            {item.size || "-"}
+          </span>
+        </p>
+
+        {/* ================= BOTTOM ROW ================= */}
+
+        <div
+          className="
+            mt-2
+            flex
+            items-center
+            justify-between
+            gap-2
+            sm:mt-3
+          "
+        >
+          {/* QUANTITY */}
+
+          <select
+            value={item.quantity}
+            disabled={isLoading}
+            onChange={(e) =>
+              handleQuantityChange(
+                item,
+                Number(e.target.value)
+              )
+            }
+            className="
+              h-8
+              min-w-[78px]
+              cursor-pointer
+              rounded-md
               border
-              border-slate-200
+              border-[#CFC8E2]
               bg-white
-              transition
-              hover:bg-slate-50
+              px-2
+              text-[11px]
+              font-medium
+              text-[#32106A]
+              outline-none
+              sm:h-9
+              sm:min-w-[88px]
+              sm:text-[12px]
             "
           >
-            <ArrowLeft size={20} />
-          </button>
+            {Array.from(
+              { length: 10 },
+              (_, index) => index + 1
+            ).map((qty) => (
+              <option
+                key={qty}
+                value={qty}
+              >
+                Qty: {qty}
+              </option>
+            ))}
+          </select>
 
-          <div>
-            <h1 className="text-2xl font-bold text-[#101828] sm:text-3xl">
-              My Cart
-            </h1>
+          {/* PRICE */}
 
-            <p className="mt-1 text-sm text-[#7182A6]">
-              {cart.posts.length}{" "}
-              {cart.posts.length === 1
-                ? "product"
-                : "products"}{" "}
-              in your cart
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-
-          {/* PRODUCTS */}
-
-          <div className="space-y-4">
-
-            {cart.posts.map((item, index) => {
-              const post =
-                typeof item.postId ===
-                "object"
-                  ? item.postId
-                  : null;
-
-              const postId =
-                post?._id ||
-                item.postId;
-
-              const image =
-                post?.media?.[0]?.mediaUrl ||
-                post?.image ||
-                post?.imageUrl ||
-                null;
-
-              const title =
-                post?.topic ||
-                post?.title ||
-                "Product";
-
-              const price = Number(
-                post?.price?.amount || 0
-              );
-
-              const itemTotal =
-                price * item.quantity;
-
-              const isLoading =
-                actionLoading === postId;
-
-              return (
-                <div
-                  key={`${postId}-${item.size}-${index}`}
-                  className="
-                    rounded-2xl
-                    border
-                    border-slate-100
-                    bg-white
-                    p-4
-                    shadow-sm
-                    sm:p-5
-                  "
-                >
-                  <div className="flex gap-4">
-
-                    {/* IMAGE */}
-
-                    <div
-                      className="
-                        flex
-                        h-28
-                        w-28
-                        shrink-0
-                        items-center
-                        justify-center
-                        overflow-hidden
-                        rounded-xl
-                        bg-[#F5F3FA]
-                        sm:h-32
-                        sm:w-32
-                      "
-                    >
-                      {image ? (
-                        <img
-                          src={image}
-                          alt={title}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <ShoppingBag
-                          size={32}
-                          className="text-[#98A2B3]"
-                        />
-                      )}
-                    </div>
-
-                    {/* DETAILS */}
-
-                    <div className="min-w-0 flex-1">
-
-                      <div className="flex justify-between gap-3">
-
-                        <div>
-                          <h2 className="truncate text-base font-semibold text-[#101828] sm:text-lg">
-                            {title}
-                          </h2>
-
-                          <p className="mt-1 text-xs text-[#7182A6]">
-                            Size:{" "}
-                            <span className="font-medium text-[#101828]">
-                              {item.size}
-                            </span>
-                          </p>
-                        </div>
-
-                        <button
-                          disabled={isLoading}
-                          onClick={() =>
-                            handleRemove(
-                              postId
-                            )
-                          }
-                          className="
-                            flex
-                            h-9
-                            w-9
-                            shrink-0
-                            items-center
-                            justify-center
-                            rounded-lg
-                            text-slate-400
-                            transition
-                            hover:bg-red-50
-                            hover:text-red-500
-                          "
-                        >
-                          {isLoading ? (
-                            <Loader2
-                              size={18}
-                              className="animate-spin"
-                            />
-                          ) : (
-                            <Trash2 size={18} />
-                          )}
-                        </button>
-
-                      </div>
-
-                      <div className="mt-6 flex items-center justify-between">
-
-                        {/* QUANTITY */}
-
-                        <div className="flex items-center rounded-xl border border-slate-200 bg-white">
-
-                          <button
-                            disabled={
-                              isLoading ||
-                              item.quantity <= 1
-                            }
-                            onClick={() =>
-                              handleQuantityChange(
-                                item,
-                                item.quantity - 1
-                              )
-                            }
-                            className="
-                              flex
-                              h-9
-                              w-9
-                              items-center
-                              justify-center
-                              text-slate-600
-                              disabled:opacity-40
-                            "
-                          >
-                            <Minus size={15} />
-                          </button>
-
-                          <span className="w-8 text-center text-sm font-semibold text-[#101828]">
-                            {item.quantity}
-                          </span>
-
-                          <button
-                            disabled={isLoading}
-                            onClick={() =>
-                              handleQuantityChange(
-                                item,
-                                item.quantity + 1
-                              )
-                            }
-                            className="
-                              flex
-                              h-9
-                              w-9
-                              items-center
-                              justify-center
-                              text-slate-600
-                            "
-                          >
-                            <Plus size={15} />
-                          </button>
-
-                        </div>
-
-                        {/* PRICE */}
-
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-[#101828]">
-                            ₹
-                            {itemTotal.toLocaleString(
-                              "en-IN"
-                            )}
-                          </p>
-
-                          <p className="text-xs text-[#7182A6]">
-                            ₹{price} ×{" "}
-                            {item.quantity}
-                          </p>
-                        </div>
-
-                      </div>
-
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* SUMMARY */}
-
-          <div className="h-fit rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
-
-            <h2 className="text-lg font-bold text-[#101828]">
-              Order Summary
-            </h2>
-
-            <div className="mt-6 space-y-4">
-
-              <div className="flex justify-between text-sm">
-                <span className="text-[#7182A6]">
-                  Subtotal
-                </span>
-
-                <span className="font-semibold text-[#101828]">
-                  ₹
-                  {Number(
-                    cart.subtotal || 0
-                  ).toLocaleString("en-IN")}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-sm">
-                <span className="text-[#7182A6]">
-                  Delivery
-                </span>
-
-                <span className="font-semibold text-[#101828]">
-                  Calculated at checkout
-                </span>
-              </div>
-
-              <div className="border-t border-slate-100 pt-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-base font-bold text-[#101828]">
-                    Total
-                  </span>
-
-                  <span className="text-xl font-bold text-[#6D28D9]">
-                    ₹
-                    {Number(
-                      cart.subtotal || 0
-                    ).toLocaleString("en-IN")}
-                  </span>
-                </div>
-              </div>
-
-            </div>
-
-            <button
-              onClick={() =>
-                router.push("/checkout")
-              }
-              className="
-                mt-6
-                flex
-                w-full
-                items-center
-                justify-center
-                rounded-xl
-                bg-[#6D28D9]
-                px-5
-                py-3.5
-                text-sm
-                font-semibold
-                text-white
-                shadow-[0_8px_20px_rgba(109,40,217,0.2)]
-                transition
-                hover:bg-[#5B21B6]
-              "
-            >
-              Proceed to Checkout
-            </button>
-
-            <button
-              onClick={() =>
-                router.push("/products")
-              }
-              className="
-                mt-3
-                w-full
-                rounded-xl
-                border
-                border-slate-200
-                bg-white
-                px-5
-                py-3.5
-                text-sm
-                font-semibold
-                text-[#475467]
-                transition
-                hover:bg-slate-50
-              "
-            >
-              Continue Shopping
-            </button>
-
-          </div>
+          <p
+            className="
+              whitespace-nowrap
+              text-[14px]
+              font-bold
+              text-[#32106A]
+              sm:text-[17px]
+            "
+          >
+            ₹ {itemTotal.toLocaleString("en-IN")}
+          </p>
         </div>
       </div>
-    </main>
+
+      {/* ================= REMOVE ================= */}
+
+      <button
+        type="button"
+        disabled={isLoading}
+        onClick={() =>
+          handleRemove(postId)
+        }
+        className="
+          absolute
+          right-2
+          top-2
+          flex
+          h-6
+          w-6
+          items-center
+          justify-center
+          text-[#8B82A6]
+          transition
+          hover:text-[#32106A]
+          disabled:opacity-40
+          sm:right-2.5
+          sm:top-2.5
+        "
+      >
+        {isLoading ? (
+          <Loader2
+            size={15}
+            className="animate-spin"
+          />
+        ) : (
+          <span
+            className="
+              text-[22px]
+              font-light
+              leading-none
+            "
+          >
+            ×
+          </span>
+        )}
+      </button>
+    </div>
   );
+})}
+      </div>
+
+      {/* ================= SUBTOTAL ================= */}
+
+      <div
+  className="
+    fixed
+    bottom-0
+    left-0
+    right-0
+    z-50
+    flex
+    items-center
+    justify-between
+    gap-3
+    border-t
+    border-[#E6E0F5]
+    bg-[#F5F2FF]
+    px-4
+    py-2.5
+    shadow-[0_-4px_15px_rgba(50,16,106,0.08)]
+    sm:static
+    sm:mt-5
+    sm:rounded-xl
+    sm:border-0
+    sm:px-6
+    sm:py-4
+    sm:shadow-none
+  "
+>
+       <div>
+  <p
+    className="
+      text-[11px]
+      font-medium
+      text-[#8B82A6]
+      sm:text-[14px]
+    "
+  >
+    Subtotal
+  </p>
+
+  <p
+    className="
+      mt-0.5
+      text-[20px]
+      font-bold
+      text-[#32106A]
+      sm:text-[26px]
+    "
+  >
+    ₹{" "}
+    {Number(
+      totalSubtotal || 0
+    ).toLocaleString("en-IN")}
+  </p>
+</div>
+
+        <button
+  type="button"
+  onClick={handleBuyAll}
+  className="
+    flex
+    min-w-[175px]
+    items-center
+    justify-center
+    gap-2
+    rounded-lg
+    bg-gradient-to-r
+    from-[#7135E8]
+    to-[#6D28D9]
+    px-5
+    py-2.5
+    text-[14px]
+    font-bold
+    text-white
+    shadow-sm
+    transition
+    hover:from-[#6428D8]
+    hover:to-[#5B21B6]
+    sm:min-w-[210px]
+    sm:py-3.5
+    sm:text-[16px]
+  "
+>
+  Buy All
+
+  <span className="text-[20px]">
+    →
+  </span>
+</button>
+      </div>
+
+    </div>
+  </main>
+);
 }

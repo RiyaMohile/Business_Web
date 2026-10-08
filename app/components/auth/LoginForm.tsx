@@ -1,16 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LockKeyhole } from "lucide-react";
+import {
+  LockKeyhole,
+  Zap,
+  Smartphone,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
 
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import AlertBox from "../common/AlertBox";
 import { useAlert } from "../../hooks/useAlert";
 
-import { registerDevice } from "../../services/deviceApi";
+import {
+  sendLoginOTP,
+} from "../../services/authApi";
+
+import {
+  registerDevice,
+} from "../../services/deviceApi";
 
 export default function LoginForm() {
   const {
@@ -24,10 +33,7 @@ export default function LoginForm() {
   const [checkingAuth, setCheckingAuth] =
     useState(true);
 
-  const [username, setUsername] =
-    useState("");
-
-  const [password, setPassword] =
+  const [mobile, setMobile] =
     useState("");
 
   const [loading, setLoading] =
@@ -42,6 +48,11 @@ export default function LoginForm() {
       try {
         const token =
           localStorage.getItem("token");
+
+        /*
+         * Token already exists
+         * means user is already logged in.
+         */
 
         if (token) {
           router.replace("/products");
@@ -64,45 +75,32 @@ export default function LoginForm() {
 
 
   /* ==========================================
-     USERNAME CHANGE
+     MOBILE CHANGE
   ========================================== */
 
-  const handleUsernameChange = (
+  const handleMobileChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    setUsername(e.target.value);
-  };
+    const value =
+      e.target.value.replace(/\D/g, "");
 
-
-  /* ==========================================
-     PASSWORD CHANGE
-  ========================================== */
-
-  const handlePasswordChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    setPassword(e.target.value);
-  };
-
-
-  /* ==========================================
-     LOGIN
-  ========================================== */
-
-  const handleLogin = async () => {
-    if (!username.trim()) {
-      showAlert(
-        "Please enter your username.",
-        "warning"
-      );
-      return;
+    if (value.length <= 10) {
+      setMobile(value);
     }
+  };
 
-    if (!password) {
+
+  /* ==========================================
+     SEND LOGIN OTP
+  ========================================== */
+
+  const sendOTP = async () => {
+    if (mobile.length !== 10) {
       showAlert(
-        "Please enter your password.",
+        "Please enter a valid 10 digit mobile number.",
         "warning"
       );
+
       return;
     }
 
@@ -110,12 +108,11 @@ export default function LoginForm() {
       setLoading(true);
 
       /* ========================================
-         GET DEVICE ID
+         DEVICE ID
       ======================================== */
 
       let deviceId =
         localStorage.getItem("deviceId");
-
 
       /* ========================================
          REGISTER DEVICE IF NOT EXISTS
@@ -131,12 +128,9 @@ export default function LoginForm() {
             deviceResponse
           );
 
-          const newDeviceId =
-            deviceResponse?.device?.deviceId;
-
           if (
             !deviceResponse?.status ||
-            !newDeviceId
+            !deviceResponse?.device?.deviceId
           ) {
             showAlert(
               "Unable to register device.",
@@ -145,6 +139,9 @@ export default function LoginForm() {
 
             return;
           }
+
+          const newDeviceId =
+            deviceResponse.device.deviceId;
 
           deviceId = newDeviceId;
 
@@ -157,7 +154,6 @@ export default function LoginForm() {
             "DEVICE ID SAVED:",
             newDeviceId
           );
-
         } catch (error: any) {
           console.error(
             "DEVICE REGISTRATION ERROR:",
@@ -175,159 +171,81 @@ export default function LoginForm() {
         }
       }
 
-
       /* ========================================
-         FINAL DEVICE ID CHECK
+         SEND LOGIN OTP
       ======================================== */
 
-      if (!deviceId) {
-        showAlert(
-          "Device ID not found.",
-          "error"
+      const mobileNumber =
+        `91${mobile}`;
+
+      const data =
+        await sendLoginOTP(
+          mobileNumber
         );
 
-        return;
-      }
-
-
-      /* ========================================
-         LOGIN API
-      ======================================== */
-
-      const response = await axios.post(
-        "https://api.thover.in/v1/api/auth/login",
-        {
-          username: username.trim(),
-          password,
-
-          // Device ID
-          deviceId,
-
-          // Application platform
-          platform: "customer",
-
-          // Browser / device type
-          deviceType: "web",
-
-          // Browser/device name
-          deviceName:
-            typeof navigator !== "undefined"
-              ? navigator.userAgent
-              : "Web Browser",
-
-          // App version
-          appVersion:
-            process.env.NEXT_PUBLIC_APP_VERSION ||
-            "1.0.0",
-        }
-      );
-
-
       console.log(
-        "LOGIN RESPONSE:",
-        response.data
+        "LOGIN OTP RESPONSE:",
+        data
       );
-
 
       /* ========================================
          CHECK RESPONSE
       ======================================== */
 
-      if (!response.data?.success) {
+      if (!data?.success) {
         showAlert(
-          response.data?.message ||
-            "Login failed.",
+          data?.message ||
+            "Unable to send OTP.",
           "error"
         );
 
         return;
       }
 
-
-      /* ========================================
-         GET TOKEN
-      ======================================== */
-
-      const token =
-        response.data?.token;
-
-      const userId =
-        response.data?.userId;
-
-
-      if (!token) {
+      if (!data?.requestId) {
         showAlert(
-          "Login token was not received.",
+          "OTP request ID was not received.",
           "error"
         );
 
         return;
       }
 
-
       /* ========================================
-         SAVE TOKEN
+         SAVE OTP DATA
       ======================================== */
 
-      localStorage.setItem(
-        "token",
-        token
+      sessionStorage.setItem(
+        "requestId",
+        data.requestId
       );
 
-
-      /* ========================================
-         SAVE USER ID
-      ======================================== */
-
-      if (userId) {
-        localStorage.setItem(
-          "userId",
-          userId
-        );
-      }
-
-
-      /* ========================================
-         SAVE USER DATA
-      ======================================== */
-
-      if (response.data?.user) {
-        localStorage.setItem(
-          "user",
-          JSON.stringify(
-            response.data.user
-          )
-        );
-      }
-
-
-      /* ========================================
-         LOGIN SUCCESS
-      ======================================== */
-
-      showAlert(
-        "Login successful.",
-        "success"
+      sessionStorage.setItem(
+        "mobile",
+        mobileNumber
       );
 
+      sessionStorage.setItem(
+        "otpType",
+        "login"
+      );
 
       /* ========================================
-         REDIRECT
+         GO TO OTP
       ======================================== */
 
-      router.replace("/products");
+      router.push("/otp");
 
     } catch (error: any) {
       console.error(
         "LOGIN ERROR:",
         error?.response?.data ||
-          error?.message ||
           error
       );
 
       showAlert(
         error?.response?.data?.message ||
-          "Invalid username or password.",
+          "Unable to continue.",
         "error"
       );
 
@@ -343,8 +261,8 @@ export default function LoginForm() {
 
   if (checkingAuth) {
     return (
-      <main className="flex min-h-[100dvh] items-center justify-center bg-gradient-to-br from-[#f7f4ff] via-white to-[#eee8ff]">
-        <div className="text-sm font-medium text-[#6D28D9]">
+      <main className="flex min-h-\[100dvh] items-center justify-center bg-gradient-to-br from-\[#f7f4ff] via-white to-\[#eee8ff]">
+        <div className="text-sm font-medium text-\[#6D28D9]">
           Loading...
         </div>
       </main>
@@ -352,274 +270,283 @@ export default function LoginForm() {
   }
 
 
-  /* ==========================================
-     LOGIN UI
-  ========================================== */
-
   return (
-    <main className="min-h-[100dvh] w-full bg-white">
+  <main className="min-h-\[100dvh] w-full bg-white">
 
-      <div className="flex min-h-[100dvh] w-full items-center justify-center">
+    <div className="flex min-h-\[100dvh] w-full items-center justify-center">
+
+      <div
+        className="
+          flex
+          min-h-[100dvh]
+          w-full
+          flex-col
+          overflow-hidden
+          bg-white
+        "
+      >
+
+        {/* =====================================
+            HEADER
+        ===================================== */}
 
         <div
           className="
+            relative
             flex
-            min-h-[100dvh]
-            w-full
+            h-[245px]
+            shrink-0
             flex-col
+            items-center
+            justify-center
             overflow-hidden
             bg-white
           "
         >
 
-          {/* =====================================
-              HEADER
-          ===================================== */}
+          {/* Soft purple glow */}
 
           <div
             className="
-              relative
-              flex
-              h-[245px]
-              shrink-0
-              flex-col
-              items-center
-              justify-center
-              overflow-hidden
-              bg-white
+              absolute
+              -top-24
+              left-1/2
+              h-64
+              w-64
+              -translate-x-1/2
+              rounded-full
+              bg-[#7C3AED]/5
+              blur-3xl
             "
-          >
+          />
 
-            {/* Soft purple glow */}
+          {/* Small decorative circles */}
 
-            <div
+ 
+
+          {/* =================================
+              ICON
+          ================================= */}
+
+          <div className="relative z-10 flex items-center justify-center">
+
+            <img
+              src="/icon.png"
+              alt="Thover"
               className="
-                absolute
-                -top-24
-                left-1/2
-                h-64
-                w-64
-                -translate-x-1/2
-                rounded-full
-                bg-[#7C3AED]/5
-                blur-3xl
+                h-[80px]
+                w-[80px] rounded-2xl
+                object-contain
               "
             />
 
+          </div>
 
-            {/* ICON */}
 
-            <div className="relative z-10 flex items-center justify-center">
+ 
 
-              <img
-                src="/icon.png"
-                alt="Thover"
-                className="
-                  h-[80px]
-                  w-[80px]
-                  rounded-2xl
-                  object-contain
-                "
-              />
+        </div>
 
-            </div>
+
+        {/* =====================================
+            LOGIN CONTENT
+        ===================================== */}
+
+        <div
+          className="
+            flex
+            flex-1
+            flex-col
+            px-6
+            pb-8
+            sm:px-10
+          "
+        >
+
+          {/* TITLE */}
+
+          <div className="text-center">
+
+            <h2
+              className="
+                text-[26px]
+                font-bold
+                tracking-tight
+                text-slate-900
+              "
+            >
+              Welcome Back 👋
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Login using OTP
+            </p>
 
           </div>
 
 
-          {/* =====================================
-              LOGIN CONTENT
-          ===================================== */}
+          {/* =================================
+              MOBILE NUMBER
+          ================================= */}
 
-          <div
-            className="
-              flex
-              flex-1
-              flex-col
-              px-6
-              pb-8
-              sm:px-10
-            "
-          >
+          <div className="mt-8">
 
-            {/* TITLE */}
-
-            <div className="text-center">
-
-              <h2
-                className="
-                  text-[26px]
-                  font-bold
-                  tracking-tight
-                  text-slate-900
-                "
-              >
-                Welcome 
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Login with your username and password
-              </p>
-
-            </div>
-
-
-            {/* =================================
-                USERNAME
-            ================================= */}
-
-            <div className="mt-8">
-
-              <Input
-                type="text"
-                value={username}
-                onChange={handleUsernameChange}
-                placeholder="Enter Username"
-                autoComplete="username"
-                disabled={loading}
-                className="
-                  h-14
-                  w-full
-                  rounded-2xl
-                  border
-                  border-slate-200
-                  bg-white
-                  px-4
-                  text-base
-                  shadow-none
-                  outline-none
-                  focus-visible:border-[#6D28D9]
-                  focus-visible:ring-4
-                  focus-visible:ring-[#6D28D9]/10
-                "
-              />
-
-            </div>
-
-
-            {/* =================================
-                PASSWORD
-            ================================= */}
-
-            <div className="mt-4">
-
-              <Input
-                type="password"
-                value={password}
-                onChange={handlePasswordChange}
-                placeholder="Enter Password"
-                autoComplete="current-password"
-                disabled={loading}
-                className="
-                  h-14
-                  w-full
-                  rounded-2xl
-                  border
-                  border-slate-200
-                  bg-white
-                  px-4
-                  text-base
-                  shadow-none
-                  outline-none
-                  focus-visible:border-[#6D28D9]
-                  focus-visible:ring-4
-                  focus-visible:ring-[#6D28D9]/10
-                "
-              />
-
-            </div>
-
-
-            {/* =================================
-                LOGIN BUTTON
-            ================================= */}
-
-            <Button
-              onClick={handleLogin}
-              disabled={
-                loading ||
-                !username.trim() ||
-                !password
-              }
+            <div
               className="
-                mt-5
+                flex
                 h-14
                 w-full
-                rounded-xl
-                bg-gradient-to-r
-                from-[#7C3AED]
-                to-[#5B21B6]
-                text-base
-                font-semibold
-                text-white
-                shadow-[0_10px_25px_rgba(109,40,217,0.18)]
+                overflow-hidden
+                rounded-2xl
+                border
+                border-slate-200
+                bg-white
                 transition
-                hover:from-[#6D28D9]
-                hover:to-[#4C1D95]
-                disabled:opacity-50
+                focus-within:border-[#6D28D9]
+                focus-within:ring-4
+                focus-within:ring-[#6D28D9]/10
               "
             >
 
-              {loading ? (
-                "Logging in..."
-              ) : (
-                <>
-                  <LockKeyhole className="mr-2 h-5 w-5" />
-                  Login
-                </>
-              )}
+              {/* COUNTRY CODE */}
 
-            </Button>
-
-
-            {/* =================================
-                REGISTER
-            ================================= */}
-
-            {/* <div className="mt-9 text-center">
-
-              <p className="text-sm text-slate-500">
-                Don't have an account?
-              </p>
-
-              <button
-                type="button"
-                onClick={() =>
-                  router.push("/register")
-                }
+              <div
                 className="
-                  mt-1
-                  text-base
+                  flex
+                  shrink-0
+                  items-center
+                  border-r
+                  border-slate-200
+                  px-4
+                  text-sm
                   font-semibold
-                  text-[#6D28D9]
-                  transition
-                  hover:text-[#5B21B6]
+                  text-slate-700
                 "
               >
-                Create Account
-              </button>
+                +91
+              </div>
 
-            </div> */}
+
+              {/* INPUT */}
+
+              <Input
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                value={mobile}
+                onChange={handleMobileChange}
+                placeholder="Enter Mobile Number"
+                className="
+                  h-full
+                  min-w-0
+                  flex-1
+                  border-0
+                  bg-transparent
+                  px-4
+                  text-base
+                  shadow-none
+                  outline-none
+                  focus-visible:ring-0
+                "
+              />
+
+            </div>
 
           </div>
+
+
+          {/* =================================
+              SEND OTP
+          ================================= */}
+
+          <Button
+            onClick={sendOTP}
+            disabled={
+              loading ||
+              mobile.length !== 10
+            }
+            className="
+              mt-5
+              h-14
+              w-full
+              rounded-xl
+              bg-gradient-to-r
+              from-[#7C3AED]
+              to-[#5B21B6]
+              text-base
+              font-semibold
+              text-white
+              shadow-[0_10px_25px_rgba(109,40,217,0.18)]
+              transition
+              hover:from-[#6D28D9]
+              hover:to-[#4C1D95]
+              disabled:opacity-50
+            "
+          >
+
+            {loading ? (
+              "Sending..."
+            ) : (
+              <>
+                <Smartphone className="mr-2 h-5 w-5" />
+                Send OTP
+              </>
+            )}
+
+          </Button>
+
+
+          {/* =================================
+              REGISTER
+          ================================= */}
+
+          <div className="mt-9 text-center">
+
+            <p className="text-sm text-slate-500">
+              Don't have an account?
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                router.push("/register")
+              }
+              className="
+                mt-1
+                text-base
+                font-semibold
+                text-[#6D28D9]
+                transition
+                hover:text-[#5B21B6]
+              "
+            >
+              Create Account
+            </button>
+
+          </div>
+
+
+ 
 
         </div>
 
       </div>
 
+    </div>
 
-      {/* =====================================
-          ALERT
-      ===================================== */}
 
-      <AlertBox
-        open={alert.open}
-        title={alert.title}
-        message={alert.message}
-        type={alert.type}
-        onClose={closeAlert}
-      />
+    {/* =====================================
+        ALERT
+    ===================================== */}
 
-    </main>
-  );
+    <AlertBox
+      open={alert.open}
+      title={alert.title}
+      message={alert.message}
+      type={alert.type}
+      onClose={closeAlert}
+    />
+
+  </main>
+);
 }

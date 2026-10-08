@@ -66,10 +66,13 @@ export const addPostToCart = async ({
 // GET MY CART
 // ==========================================
 
-export const getMyCart = async () => {
+export const getMyCart = async (storeId: string) => {
   const response = await axios.get(
     `${API_URL}/cart/my-cart`,
     {
+      params: {
+        storeId,
+      },
       headers: getAuthHeaders(),
     }
   );

@@ -1,4 +1,4 @@
-"use client";
+
 
 import {
   ArrowLeft,
@@ -6,6 +6,7 @@ import {
   Heart,
   Loader2,
   Share2,
+  ShoppingCart,
   ShieldCheck,
   Star,
   Truck,
@@ -32,6 +33,7 @@ import {
   getReviewsByPostId,
   Review,
 } from "../../services/reviewApi";
+import { createCart, addPostToCart } from "../../services/cartApi";
 
 export default function ProductDetailsPage() {
 
@@ -58,7 +60,13 @@ export default function ProductDetailsPage() {
     useState(0);
 
   const [selectedSize, setSelectedSize] =
-    useState("L");
+  useState("");
+
+const [quantity, setQuantity] =
+  useState(1);
+
+const [addingToCart, setAddingToCart] =
+  useState(false);
 
   const [liked, setLiked] =
     useState(false);
@@ -74,6 +82,7 @@ export default function ProductDetailsPage() {
 
   const [showReviewModal, setShowReviewModal] =
     useState(false);
+    const [showComingSoon, setShowComingSoon] = useState(false);
 
   const [reviewRating, setReviewRating] =
     useState(0);
@@ -169,6 +178,15 @@ export default function ProductDetailsPage() {
           setProduct(
             response.data
           );
+          if (response.data?.inventory?.length) {
+  const availableSize = response.data.inventory.find(
+    (item: any) => item.stock > 0
+  );
+
+  if (availableSize) {
+    setSelectedSize(availableSize.size);
+  }
+}
 
         } catch (error: any) {
 
@@ -577,20 +595,173 @@ finalPrice = Math.max(
   // BUY NOW
   // ==========================================
 
-  const handleBuyNow =
-    () => {
+ const handleBuyNow = () => {
+  if (!product?._id) return;
 
-      console.log(
-        "BUY NOW",
-        {
-          postId:
-            product._id,
-          size:
-            selectedSize,
-        }
+  const storeId =
+    product.store?._id;
+
+  if (!storeId) {
+    alert("Store information not found");
+    return;
+  }
+
+  const checkoutData = {
+    products: [
+      {
+        postId: product._id,
+        topic: product.topic,
+        image:
+          product.media?.[0]?.mediaUrl ||
+          "",
+        quantity: 1,
+        size: selectedSize,
+        price:
+          Number(
+            product.price?.amount || 0
+          ),
+      },
+    ],
+
+    address: null,
+
+    deliveryCharge: 150,
+  };
+
+  localStorage.setItem(
+    "checkoutData",
+    JSON.stringify(checkoutData)
+  );
+
+  router.push("/checkout");
+};
+
+  // ==========================================
+  // ADD TO CART
+  // ==========================================
+
+  const handleAddToCart = async () => {
+  if (addingToCart) return;
+
+  try {
+    if (!product?._id) return;
+
+    const storeId = product.store?._id;
+
+    if (!storeId) {
+      alert("Store information not found");
+      return;
+    }
+
+    setAddingToCart(true);
+
+    // ==========================================
+    // SAVE STORE ID
+    // ==========================================
+
+    const existingStoreIds = JSON.parse(
+      localStorage.getItem("cartStoreIds") || "[]"
+    );
+
+    if (!existingStoreIds.includes(storeId)) {
+      existingStoreIds.push(storeId);
+
+      localStorage.setItem(
+        "cartStoreIds",
+        JSON.stringify(existingStoreIds)
       );
+    }
 
-    };
+    localStorage.setItem(
+      "cartStoreId",
+      storeId
+    );
+
+    // ==========================================
+    // CREATE CART OR GET EXISTING CART
+    // ==========================================
+
+    const cartResponse =
+      await createCart(storeId);
+
+    console.log(
+      "CREATE CART RESPONSE:",
+      cartResponse
+    );
+
+    const cart =
+      cartResponse?.cart;
+
+    const cartId =
+      cart?._id;
+
+    if (!cartId) {
+      throw new Error(
+        "Cart ID not found"
+      );
+    }
+
+    // ==========================================
+    // CHECK IF PRODUCT ALREADY EXISTS
+    // ==========================================
+
+    const alreadyAdded =
+      Array.isArray(cart?.posts)
+        ? cart.posts.some(
+            (item: any) => {
+              const existingPostId =
+                item.postId?._id ||
+                item.postId;
+
+              return (
+                String(existingPostId) ===
+                String(product._id)
+              );
+            }
+          )
+        : false;
+
+    if (alreadyAdded) {
+      alert(
+        "This product is already in your cart. You can increase the quantity from the cart."
+      );
+      return;
+    }
+
+    // ==========================================
+    // ADD PRODUCT
+    // ==========================================
+
+    const addResponse =
+      await addPostToCart({
+        cartId,
+        postId: product._id,
+        size: selectedSize,
+        quantity,
+      });
+
+    console.log(
+      "ADD TO CART RESPONSE:",
+      addResponse
+    );
+
+    alert(
+      "Product added to cart successfully"
+    );
+
+  } catch (error) {
+    console.error(
+      "Add to cart error:",
+      error
+    );
+
+    alert(
+      "Failed to add product to cart"
+    );
+  } finally {
+    setAddingToCart(false);
+  }
+};
 
 
   return (
@@ -798,6 +969,22 @@ finalPrice = Math.max(
         "
       >
 
+        {/* STOCK + IDEAL FOR */}
+
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="inline-flex items-center gap-2 rounded-full bg-[#EFFAF3] px-3 py-1.5 text-xs font-semibold text-[#20A35A]">
+            <span className="h-2 w-2 rounded-full bg-[#20A35A]" />
+            In Stock
+          </div>
+
+          {product.idealFor && (
+            <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-[#475467]">
+              Ideal For: {product.idealFor}
+            </div>
+          )}
+        </div>
+
+
         {/* TITLE */}
 
         <div
@@ -906,43 +1093,31 @@ finalPrice = Math.max(
           "
         >
 
-          {[
-            "S",
-            "M",
-            "L",
-            "XL",
-            "XXL",
-          ].map(
-            (size) => (
-
-              <button
-                key={size}
-                type="button"
-                onClick={() =>
-                  setSelectedSize(
-                    size
-                  )
-                }
-                className={`
-                  h-7
-                  min-w-7
-                  rounded-md
-                  border
-                  px-2
-                  text-xs
-                  ${
-                    selectedSize ===
-                    size
-                      ? "border-black bg-black text-white"
-                      : "border-slate-300 bg-white"
-                  }
-                `}
-              >
-                {size}
-              </button>
-
-            )
-          )}
+          {product.inventory?.map((item) => (
+  <button
+    key={item.size}
+    type="button"
+    disabled={item.stock <= 0}
+    onClick={() => setSelectedSize(item.size)}
+    className={`
+      h-7
+      min-w-7
+      rounded-md
+      border
+      px-2
+      text-xs
+      ${
+        selectedSize === item.size
+          ? "border-black bg-black text-white"
+          : item.stock <= 0
+          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+          : "border-slate-300 bg-white"
+      }
+    `}
+  >
+    {item.size}
+  </button>
+))}
 
         </div>
 
@@ -982,19 +1157,21 @@ finalPrice = Math.max(
                 size={18}
               />
             }
-            title="Quality"
-            subtitle="Assured"
+            title="Availability"
+            subtitle={product.store?.address?.city || "N/A"}
           />
 
           <Feature
             icon={
-              <Truck
+              <ShieldCheck
                 size={18}
               />
             }
-            title="Free Delivery"
-            subtitle="Orders above ₹499"
+            title="Quality"
+            subtitle="Assured"
           />
+
+          
 
           <Feature
             icon={
@@ -1058,17 +1235,85 @@ finalPrice = Math.max(
 
           {showDescription && (
 
-            <p
-              className="
-                pb-4
-                text-xs
-                leading-relaxed
-                text-slate-600
-              "
-            >
-              {product.description ||
-                "No description available."}
-            </p>
+           <div className="pb-4">
+
+  {/* DESCRIPTION */}
+  <p
+    className="
+      text-xs
+      leading-relaxed
+      text-slate-600
+    "
+  >
+    {product.description ||
+      "No description available."}
+  </p>
+
+  {/* CATEGORY + TAGS */}
+  <div className="mt-4 flex flex-wrap items-center gap-2">
+
+    {/* CATEGORY */}
+    {product.category && (
+      <div
+        className="
+          flex
+          items-center
+          gap-1.5
+          rounded-full
+          border
+          border-slate-200
+          px-3
+          py-1.5
+          text-[10px]
+          text-slate-600
+        "
+      >
+        <ShieldCheck
+          size={14}
+          className="text-[#6D28D9]"
+        />
+
+        <span>
+          {product.category}
+        </span>
+      </div>
+    )}
+
+    {/* TAGS */}
+    {product.tags &&
+      product.tags.length > 0 &&
+      product.tags.map(
+        (tag: string, index: number) => (
+          <div
+            key={`${tag}-${index}`}
+            className="
+              flex
+              items-center
+              gap-1.5
+              rounded-full
+              border
+              border-slate-200
+              px-3
+              py-1.5
+              text-[10px]
+              text-slate-600
+            "
+          >
+            <ShieldCheck
+              size={14}
+              className="text-[#6D28D9]"
+            />
+
+            <span>
+              {tag}
+            </span>
+          </div>
+        )
+      )}
+
+  </div>
+
+</div>
 
           )}
 
@@ -1459,25 +1704,50 @@ finalPrice = Math.max(
 
 
           <button
+  type="button"
+  onClick={handleAddToCart}
+  disabled={addingToCart}
+  className="
+    h-12
+    flex-1
+    rounded-xl
+    border
+    border-[#6D28D9]
+    bg-white
+    px-3
+    text-sm
+    font-semibold
+    text-[#6D28D9]
+    transition
+    disabled:cursor-not-allowed
+    disabled:opacity-50
+  "
+>
+  <ShoppingCart className="mr-1 inline-block h-4 w-4" />
+
+  {addingToCart
+    ? "Adding..."
+    : "Add to Cart"}
+</button>
+
+          <button
             type="button"
-            onClick={
-              handleBuyNow
-            }
+            onClick={handleBuyNow}
             className="
-  h-12
-  flex-1
-  rounded-xl
-  bg-gradient-to-r
-  from-[#7C3AED]
-  to-[#5B21B6]
-  text-sm
-  font-semibold
-  text-white
-  shadow-md
-  transition
-  hover:from-[#6D28D9]
-  hover:to-[#4C1D95]
-"
+              h-12
+              flex-1
+              rounded-xl
+              bg-gradient-to-r
+              from-[#7C3AED]
+              to-[#5B21B6]
+              text-sm
+              font-semibold
+              text-white
+              shadow-md
+              transition
+              hover:from-[#6D28D9]
+              hover:to-[#4C1D95]
+            "
           >
             Buy Now
           </button>
@@ -1713,6 +1983,101 @@ finalPrice = Math.max(
 
         </div>
       )}
+
+      {/* =====================================
+    COMING SOON MODAL
+===================================== */}
+
+{showComingSoon && (
+  <div
+    className="
+      fixed
+      inset-0
+      z-[200]
+      flex
+      items-center
+      justify-center
+      bg-black/40
+      px-4
+    "
+    onClick={() => setShowComingSoon(false)}
+  >
+    <div
+      className="
+        w-full
+        max-w-[380px]
+        rounded-2xl
+        bg-white
+        p-6
+        text-center
+        shadow-2xl
+      "
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Icon */}
+      <div
+        className="
+          mx-auto
+          flex
+          h-16
+          w-16
+          items-center
+          justify-center
+          rounded-full
+          bg-[#F3E8FF]
+        "
+      >
+        <span className="text-3xl">🚀</span>
+      </div>
+
+      {/* Title */}
+      <h2
+        className="
+          mt-4
+          text-xl
+          font-bold
+          text-[#101828]
+        "
+      >
+        Thover Coming Soon
+      </h2>
+
+      {/* Description */}
+      <p
+        className="
+          mt-2
+          text-sm
+          leading-6
+          text-[#7182A6]
+        "
+      >
+        We are working hard to bring Thover to you.
+        Stay tuned!
+      </p>
+
+      {/* Button */}
+      <button
+        type="button"
+        onClick={() => setShowComingSoon(false)}
+        className="
+          mt-6
+          h-11
+          w-full
+          rounded-xl
+          bg-gradient-to-r
+          from-[#7C3AED]
+          to-[#5B21B6]
+          text-sm
+          font-semibold
+          text-white
+          shadow-md
+        "
+      >
+        Okay
+      </button>
+    </div>
+  </div>
+)}
 
     </main>
   );

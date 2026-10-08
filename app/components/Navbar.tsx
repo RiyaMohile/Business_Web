@@ -18,7 +18,11 @@ import {
   ChevronDown,
   LogOut,
   ShoppingCart,
+  Plus,
 } from "lucide-react";
+
+import axios from "axios";
+import AddressModal from "../components/address/AddressModal";
 
 // ======================================================
 // API IMPORTS
@@ -57,6 +61,19 @@ interface LikedStore {
     area?: string;
     city?: string;
   };
+}
+interface UserAddress {
+  _id: string;
+  name?: string;
+  street?: string;
+  area?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  pinCode?: string;
+  latitude?: number;
+  longitude?: number;
+  isPrimary?: boolean;
 }
 
 interface NavbarProps {
@@ -106,8 +123,48 @@ export default function Navbar({
     useState(false);
     const [cartCount, setCartCount] = useState(0);
 
+    const [showAddressModal, setShowAddressModal] =
+  useState(false);
+
+const [showAddAddress, setShowAddAddress] =
+  useState(false);
+
+const [addresses, setAddresses] =
+  useState<UserAddress[]>([]);
+
+const [loadingAddresses, setLoadingAddresses] =
+  useState(false);
+
+const [selectedAddressId, setSelectedAddressId] =
+  useState<string | null>(null);
+
+  const [selectedAddress, setSelectedAddress] =
+  useState<UserAddress | null>(null);
+
     useEffect(() => {
   fetchCartCount();
+
+  const savedAddress =
+    localStorage.getItem("selectedAddress");
+
+  if (savedAddress) {
+    try {
+      const address: UserAddress =
+        JSON.parse(savedAddress);
+
+      setSelectedAddress(address);
+      setSelectedAddressId(address._id);
+    } catch (error) {
+      console.error(
+        "SAVED ADDRESS PARSE ERROR:",
+        error
+      );
+
+      localStorage.removeItem(
+        "selectedAddress"
+      );
+    }
+  }
 }, []);
 
   // ======================================================
@@ -270,9 +327,16 @@ export default function Navbar({
       return;
     }
 
-    const response = await getMyCart();
+    const storeId = localStorage.getItem("cartStoreId");
 
-    const cart = response?.cart;
+if (!storeId) {
+  setCartCount(0);
+  return;
+}
+
+const response = await getMyCart(storeId);
+
+const cart = response?.cart;
 
     if (!cart?.posts) {
       setCartCount(0);
@@ -294,6 +358,104 @@ export default function Navbar({
 
     setCartCount(0);
   }
+};
+
+const fetchAddresses = async () => {
+  try {
+    setLoadingAddresses(true);
+
+    const token =
+      localStorage.getItem("token");
+
+    if (!token) {
+      return;
+    }
+
+    const response = await axios.get(
+      "https://api.thover.in/v1/api/address/",
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const addressList =
+      response.data?.data || [];
+
+    const list = Array.isArray(addressList)
+      ? addressList
+      : [];
+
+    setAddresses(list);
+
+    // Agar already koi address select hai,
+// to usi ko selected rakho.
+// Sirf first time mein primary address use karo.
+const savedAddress =
+  localStorage.getItem("selectedAddress");
+
+if (!savedAddress) {
+  const primaryAddress = list.find(
+    (address: UserAddress) =>
+      address.isPrimary
+  );
+
+  if (primaryAddress) {
+    setSelectedAddressId(
+      primaryAddress._id
+    );
+
+    setSelectedAddress(
+      primaryAddress
+    );
+
+    localStorage.setItem(
+      "selectedAddress",
+      JSON.stringify(primaryAddress)
+    );
+  }
+}
+
+  } catch (error: any) {
+    console.error(
+      "GET ADDRESSES ERROR:",
+      error.response?.data ||
+        error.message
+    );
+  } finally {
+    setLoadingAddresses(false);
+  }
+};
+
+const handleLocationClick = async () => {
+  setShowAddressModal(true);
+
+  await fetchAddresses();
+};
+const handleAddNewAddress = () => {
+  setShowAddressModal(false);
+  setShowAddAddress(true);
+};
+
+const handleSelectAddress = (
+  address: UserAddress
+) => {
+  setSelectedAddressId(address._id);
+  setSelectedAddress(address);
+
+  // Refresh ke baad bhi selected address rahe
+  localStorage.setItem(
+    "selectedAddress",
+    JSON.stringify(address)
+  );
+
+  console.log(
+    "SELECTED ADDRESS:",
+    address
+  );
+
+  setShowAddressModal(false);
 };
 
   return (
@@ -333,46 +495,46 @@ export default function Navbar({
           {/* =================================================
               LOGO
           ================================================== */}
+<Link
+  href="/products"
+  className="flex shrink-0 items-center gap-3"
+>
+  {/* Mobile: THOVER only */}
+  <span
+    className="
+      text-[24px]
+      font-bold
+      tracking-[-0.04em]
+      text-[#101828]
+      lg:hidden
+    "
+  >
+    THOVER
+  </span>
 
-          <Link
-            href="/products"
-            className="
-              flex
-              shrink-0
-              items-center
-              gap-3
-            "
-          >
-            <Image
-              src="/icon.png"
-              alt="Thover"
-              width={50}
-              height={50}
-              priority
-              className="
-                h-[50px]
-                w-[50px]
-                rounded-[8px]
-                object-contain
-                sm:h-[52px]
-                sm:w-[52px]
-              "
-            />
+  {/* Desktop: Icon + THOVER */}
+  <div className="hidden items-center gap-3 lg:flex">
+    <Image
+      src="/icon.png"
+      alt="Thover"
+      width={50}
+      height={50}
+      priority
+      className="h-[50px] w-[50px] rounded-[8px] object-contain"
+    />
 
-            {/* Desktop only */}
-            <span
-              className="
-                hidden
-                text-[30px]
-                font-bold
-                tracking-[-0.04em]
-                text-[#101828]
-                lg:block
-              "
-            >
-              THOVER
-            </span>
-          </Link>
+    <span
+      className="
+        text-[30px]
+        font-bold
+        tracking-[-0.04em]
+        text-[#101828]
+      "
+    >
+      THOVER
+    </span>
+  </div>
+</Link>
 
           {/* =================================================
               DESKTOP SEARCH
@@ -457,7 +619,7 @@ export default function Navbar({
 
             <button
               type="button"
-              onClick={onLocationClick}
+              onClick={handleLocationClick}
               className="
                 flex
                 items-center
@@ -478,17 +640,33 @@ export default function Navbar({
               />
 
               <span
-                className="
-                  max-w-[110px]
-                  truncate
-                  text-sm
-                  font-bold
-                  text-[#101828]
-                  sm:max-w-[140px]
-                "
-              >
-                {city}
-              </span>
+  className="
+    block
+    max-w-[90px]
+    truncate
+    text-xs
+    font-semibold
+    text-[#101828]
+    sm:max-w-[160px]
+    sm:text-sm
+  "
+>
+  {/* Mobile: City only */}
+  <span className="sm:hidden">
+    {selectedAddress?.city || city || "Select Location"}
+  </span>
+
+  {/* Desktop: Area + City */}
+  <span className="hidden sm:block">
+    {selectedAddress
+      ? `${selectedAddress.area || ""}${
+          selectedAddress.city
+            ? `, ${selectedAddress.city}`
+            : ""
+        }`
+      : city || "Select Location"}
+  </span>
+</span>
             </button>
 
             {/* CART */}
@@ -504,9 +682,7 @@ export default function Navbar({
     shrink-0
     items-center
     justify-center
-    rounded-full
-    border
-    border-slate-200
+    
     bg-white
     text-[#101828]
     transition
@@ -555,9 +731,7 @@ export default function Navbar({
                 shrink-0
                 items-center
                 justify-center
-                rounded-full
-                border
-                border-slate-200
+                
                 bg-white
                 text-[#475467]
                 transition
@@ -643,6 +817,277 @@ export default function Navbar({
           </div>
         </div>
       </header>
+
+
+{/* =====================================================
+    SAVED ADDRESSES MODAL
+===================================================== */}
+
+{showAddressModal && (
+  <div
+    className="
+      fixed
+      inset-0
+      z-[100]
+      flex
+      items-center
+      justify-center
+      bg-black/50
+      px-4
+    "
+    onClick={() => setShowAddressModal(false)}
+  >
+    <div
+      className="
+        w-full
+        max-w-md
+        overflow-hidden
+        rounded-3xl
+        bg-white
+        shadow-2xl
+      "
+      onClick={(e) => e.stopPropagation()}
+    >
+
+      {/* HEADER */}
+
+      <div
+        className="
+          flex
+          items-center
+          justify-between
+          border-b
+          border-slate-100
+          px-5
+          py-4
+        "
+      >
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">
+            Select Address
+          </h2>
+
+          <p className="mt-1 text-xs text-slate-500">
+            Choose an address to see nearby stores
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowAddressModal(false)}
+          className="
+            flex
+            h-9
+            w-9
+            items-center
+            justify-center
+            rounded-full
+            text-slate-500
+            hover:bg-slate-100
+          "
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* CONTENT */}
+
+      <div className="max-h-[65vh] overflow-y-auto p-5">
+
+        {loadingAddresses ? (
+          <div
+            className="
+              flex
+              flex-col
+              items-center
+              justify-center
+              py-10
+            "
+          >
+            <Loader2
+              size={28}
+              className="animate-spin text-violet-600"
+            />
+
+            <p className="mt-3 text-sm text-slate-500">
+              Loading addresses...
+            </p>
+          </div>
+
+        ) : addresses.length === 0 ? (
+          <div className="py-8 text-center">
+
+            <MapPin
+              size={40}
+              className="mx-auto mb-3 text-slate-300"
+            />
+
+            <p className="text-sm font-medium text-slate-700">
+              No saved addresses
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Add an address to continue
+            </p>
+
+          </div>
+
+        ) : (
+          <div className="space-y-3">
+
+            {addresses.map((address) => {
+              const isSelected =
+                selectedAddressId === address._id;
+
+              return (
+                <button
+                  key={address._id}
+                  type="button"
+                  onClick={() =>
+                    handleSelectAddress(address)
+                  }
+                  className={`
+                    w-full
+                    rounded-2xl
+                    border
+                    p-4
+                    text-left
+                    transition
+                    ${
+                      isSelected
+                        ? "border-violet-500 bg-violet-50"
+                        : "border-slate-200 bg-white hover:border-violet-300 hover:bg-slate-50"
+                    }
+                  `}
+                >
+                  <div className="flex gap-3">
+
+                    <div
+                      className={`
+                        flex
+                        h-10
+                        w-10
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        ${
+                          isSelected
+                            ? "bg-violet-600 text-white"
+                            : "bg-slate-100 text-slate-600"
+                        }
+                      `}
+                    >
+                      <MapPin size={19} />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-slate-900">
+                          {address.name || "Saved Address"}
+                        </p>
+
+                        {address.isPrimary && (
+                          <span
+                            className="
+                              rounded-full
+                              bg-green-100
+                              px-2
+                              py-0.5
+                              text-[10px]
+                              font-semibold
+                              text-green-700
+                            "
+                          >
+                            Primary
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="mt-1 text-sm text-slate-600">
+                        {address.street}
+                      </p>
+
+                      <p className="text-sm text-slate-600">
+                        {address.area}
+                        {address.city
+                          ? `, ${address.city}`
+                          : ""}
+                      </p>
+
+                      {address.pinCode && (
+                        <p className="mt-1 text-xs text-slate-400">
+                          {address.pinCode}
+                        </p>
+                      )}
+
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+
+          </div>
+        )}
+
+        {/* ADD NEW ADDRESS */}
+
+        <button
+          type="button"
+          onClick={handleAddNewAddress}
+          className="
+            mt-4
+            flex
+            w-full
+            items-center
+            justify-center
+            gap-2
+            rounded-2xl
+            border-2
+            border-dashed
+            border-violet-300
+            bg-violet-50
+            px-4
+            py-4
+            text-sm
+            font-semibold
+            text-violet-700
+            transition
+            hover:bg-violet-100
+          "
+        >
+          <Plus size={19} />
+          Add New Address
+        </button>
+
+      </div>
+    </div>
+  </div>
+)}
+
+{/* =====================================================
+    ADD NEW ADDRESS
+===================================================== */}
+
+{showAddAddress && (
+  <AddressModal
+    onSuccess={async (addressId) => {
+      console.log(
+        "NEW ADDRESS CREATED:",
+        addressId
+      );
+
+      await fetchAddresses();
+
+      setShowAddAddress(false);
+
+      setSelectedAddressId(addressId);
+
+      setShowAddressModal(true);
+    }}
+  />
+)}
 
       {/* =====================================================
           ACCOUNT PANEL

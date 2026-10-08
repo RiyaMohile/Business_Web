@@ -164,6 +164,8 @@ const extractCoordinates = (
     "address",
     "data",
     "storeId",
+    // Store address → populated saved address with lat/lng
+    "addressId",
     "storeLocation",
     "pickupAddress",
     "pickupLocation",
@@ -184,73 +186,100 @@ const extractCoordinates = (
   return null;
 };
 
-// Store address as text, for geocoding when no coordinates exist
-// (same fields the mobile app reads)
-const extractAddressText = (obj: any): string => {
-  if (!obj) return "";
+interface AddressParts {
+  street: string;
+  area: string;
+  city: string;
+  state: string;
+  pinCode: string;
+  country: string;
+}
 
-  if (typeof obj === "string") return obj.trim();
+const ADDRESS_FIELDS: (keyof AddressParts)[] = [
+  "street",
+  "area",
+  "city",
+  "state",
+  "pinCode",
+  "country",
+];
 
-  if (typeof obj !== "object") return "";
+const isObject = (value: any) =>
+  value != null && typeof value === "object";
 
-  const parts: string[] = [];
-
-  const add = (value: any) => {
-    const text = value == null ? "" : String(value).trim();
-
-    if (text && !parts.includes(text)) parts.push(text);
+// Store address fields, merged from every place the API puts them:
+// store.address ({ addressId, area, city }, addressId maybe populated),
+// the post's address / storeAddress, then top-level fields
+const extractAddressParts = (obj: any): AddressParts => {
+  const parts: AddressParts = {
+    street: "",
+    area: "",
+    city: "",
+    state: "",
+    pinCode: "",
+    country: "",
   };
 
-  if (obj.store?.address && typeof obj.store.address === "object") {
-    add(obj.store.address.area);
-  }
+  if (!isObject(obj)) return parts;
 
-  const addr =
-    obj.address && typeof obj.address === "object"
-      ? obj.address
-      : obj.storeAddress && typeof obj.storeAddress === "object"
-      ? obj.storeAddress
-      : null;
+  const sources = [
+    obj.store?.address?.addressId,
+    obj.store?.address,
+    obj.address,
+    obj.storeAddress,
+    obj,
+  ].filter(isObject);
 
-  if (addr) {
-    for (const key of [
-      "street",
-      "area",
-      "locality",
-      "subLocality",
-      "city",
-      "state",
-      "pinCode",
-      "country",
-    ]) {
-      add(addr[key]);
+  for (const field of ADDRESS_FIELDS) {
+    for (const source of sources) {
+      const value = String(
+        source[field] ??
+          (field === "area"
+            ? source.locality ?? source.subLocality ?? ""
+            : "")
+      ).trim();
+
+      if (value) {
+        parts[field] = value;
+        break;
+      }
     }
   }
 
-  if (parts.length) return parts.join(", ");
-
-  for (const key of [
-    "street",
-    "area",
-    "city",
-    "state",
-    "pinCode",
-    "country",
-  ]) {
-    add(obj[key]);
-  }
-
-  return parts.join(", ");
+  return parts;
 };
 
-const customerAddressText = (item: Address): string =>
-  [item.street, item.city, item.state, item.pinCode, item.country]
-    .map((value) => String(value || "").trim())
-    .filter(
-      (value, index, list) =>
-        value && list.indexOf(value) === index
-    )
-    .join(", ");
+const customerAddressParts = (item: Address): AddressParts => ({
+  street: String(item.street || "").trim(),
+  area: String(item.area || "").trim(),
+  city: String(item.city || "").trim(),
+  state: String(item.state || "").trim(),
+  pinCode: String(item.pinCode || "").trim(),
+  country: String(item.country || "").trim(),
+});
+
+// Most specific query first. OpenStreetMap often misses full Indian
+// street addresses, so fall back to area → pin code → city.
+const buildGeocodeQueries = (parts: AddressParts): string[] => {
+  const { street, area, city, state, pinCode, country } = parts;
+
+  const join = (...values: string[]) =>
+    values.filter(Boolean).join(", ");
+
+  const queries = [
+    join(street, area, city, state, pinCode, country),
+    join(area, city, state, country),
+    // "Kishore Ganj" is mapped as "Kishoreganj"
+    join(area.replace(/\s+/g, ""), city, state, country),
+    join(pinCode, city, state, country),
+    join(city, state, country),
+  ];
+
+  return queries.filter(
+    (query, index) =>
+      query.includes(",") && queries.indexOf(query) === index
+  );
+};
 
 // Address text → coordinates via OpenStreetMap Nominatim
 // (the mobile app's fallback). Cached per address string.
@@ -293,6 +322,21 @@ const geocodeAddress = async (
   }
 };
 
+// Tries each query in turn (one at a time, per Nominatim's usage policy)
+const geocodeParts = async (
+  parts: AddressParts
+): Promise<LatLng | null> => {
+  for (const query of buildGeocodeQueries(parts)) {
+    const location = await geocodeAddress(query);
+
+    console.log("GEOCODE:", query, "→", location);
+
+    if (location) return location;
+  }
+
+  return null;
+};
+
 const getAddressLatLng = (
   item: Address | null
 ): LatLng | null => {
@@ -321,6 +365,8 @@ export default function CheckoutPage() {
   const [storeId, setStoreId] = useState<string | null>(null);
   const [storeLocation, setStoreLocation] =
     useState<LatLng | null>(null);
+  // Dev-only: what the store-location lookup found
+  const [deliveryDebug, setDeliveryDebug] = useState("");
   const [storeLocationLoading, setStoreLocationLoading] =
     useState(false);
 
@@ -362,7 +408,7 @@ export default function CheckoutPage() {
 
     let cancelled = false;
 
-    geocodeAddress(customerAddressText(address)).then((location) => {
+    geocodeParts(customerAddressParts(address)).then((location) => {
       if (!cancelled) {
         setGeocodedAddresses((prev) => ({
           ...prev,
@@ -488,21 +534,26 @@ export default function CheckoutPage() {
 
     // No coordinates anywhere → geocode the store's address text
     const fromStoreAddressText = async (): Promise<LatLng | null> => {
-      const text =
-        extractAddressText(postDetails) ||
-        extractAddressText(storeDetails);
+      const fromPost = extractAddressParts(postDetails);
 
-      console.log("STORE ADDRESS TO GEOCODE:", text);
+      const parts = fromPost.city || fromPost.pinCode
+        ? fromPost
+        : extractAddressParts(storeDetails);
 
-      return geocodeAddress(text);
+      console.log("STORE ADDRESS TO GEOCODE:", parts);
+
+      return geocodeParts(parts);
     };
 
     const fetchStoreLocation = async () => {
       setStoreLocationLoading(true);
 
+      // Product details first (like the mobile app); the store API
+      // 404s for some store IDs, so it is only a fallback
       const location =
-        (await fromStoreDetails()) ||
         (await fromPostDetails()) ||
+        (await fromStoreAddressText()) ||
+        (await fromStoreDetails()) ||
         (await fromStoreAddressText());
 
       if (!location) {
@@ -511,8 +562,26 @@ export default function CheckoutPage() {
         );
       }
 
+      // Everything the distance depends on, shown on the page in dev
+      const debug = JSON.stringify(
+        {
+          storeId,
+          postId: firstPostId,
+          location,
+          postKeys: postDetails ? Object.keys(postDetails) : null,
+          postStore: postDetails?.store ?? null,
+          postLocation: postDetails?.location ?? null,
+          postAddress: postDetails?.address ?? null,
+        },
+        null,
+        2
+      );
+
+      console.log("DELIVERY DEBUG:", debug);
+
       if (!cancelled) {
         setStoreLocation(location);
+        setDeliveryDebug(debug);
         setStoreLocationLoading(false);
       }
     };
@@ -1180,7 +1249,7 @@ export default function CheckoutPage() {
                           {storeLocationLoading
                             ? "Calculating distance..."
                             : distanceKm != null
-                            ? `${distanceKm.toFixed(1)} km from store`
+                            ? `${distanceKm.toFixed(1)} km from store · Delivery ₹${deliveryCharge}`
                             : "Distance unavailable – minimum delivery charge applied"}
                         </p>
                       </>
@@ -1508,12 +1577,20 @@ export default function CheckoutPage() {
                 </span>
               </div>
 
-              <div className="flex justify-between text-sm">
-                <span className="text-[#7182A6]">
-                  {distanceKm != null
-                    ? `Delivery (${distanceKm.toFixed(1)} km)`
-                    : "Delivery Charge"}
-                </span>
+              <div className="flex justify-between gap-3 text-sm">
+                <div>
+                  <span className="text-[#7182A6]">
+                    Delivery Charge
+                  </span>
+
+                  <p className="mt-0.5 text-[11px] text-[#8B82A6]">
+                    {storeLocationLoading
+                      ? "Calculating distance..."
+                      : distanceKm != null
+                      ? `Distance: ${distanceKm.toFixed(1)} km`
+                      : "Distance unavailable · minimum charge"}
+                  </p>
+                </div>
 
                 <span className="font-semibold text-[#32106A]">
                   {storeLocationLoading ? (
@@ -1531,6 +1608,19 @@ export default function CheckoutPage() {
                   )}
                 </span>
               </div>
+
+              {process.env.NODE_ENV === "development" &&
+                deliveryDebug && (
+                  <details className="rounded-lg bg-[#F8F7FC] p-2 text-[10px] text-[#32106A]">
+                    <summary className="cursor-pointer font-semibold">
+                      Delivery debug (dev only)
+                    </summary>
+
+                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all">
+                      {deliveryDebug}
+                    </pre>
+                  </details>
+                )}
 
               <div className="flex justify-between text-sm">
                 <span className="text-[#7182A6]">

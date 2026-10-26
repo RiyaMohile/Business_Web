@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import ResponsiveProductDetailsPage from "../../components/products/ResponsiveProductDetailsPage";
 
 export const metadata: Metadata = {
-  title: "Product Details – Thover Marketplace",
+  title: "Product Details – Thover",
   description:
     "Explore product details, pricing, availability, and local shopping options on Thover Marketplace, your hyperlocal marketplace.",
 };

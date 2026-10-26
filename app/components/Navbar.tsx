@@ -30,7 +30,7 @@ import AddressModal from "../components/address/AddressModal";
 // ======================================================
 
 import { getUserDetails, logoutUser } from "../services/authApi";
-import { getLikedStores } from "../services/storeApi";
+import { getLikedStores,  searchStoreByStoreId, } from "../services/storeApi";
 import { getMyCart } from "../services/cartApi";
 
 // ======================================================
@@ -141,6 +141,10 @@ const [selectedAddressId, setSelectedAddressId] =
   const [selectedAddress, setSelectedAddress] =
   useState<UserAddress | null>(null);
 
+
+  const [storeSearchLoading, setStoreSearchLoading] =
+  useState(false);
+
     useEffect(() => {
   fetchCartCount();
 
@@ -154,6 +158,7 @@ const [selectedAddressId, setSelectedAddressId] =
 
       setSelectedAddress(address);
       setSelectedAddressId(address._id);
+      localStorage.setItem("customerAddressId", address._id);
     } catch (error) {
       console.error(
         "SAVED ADDRESS PARSE ERROR:",
@@ -229,6 +234,49 @@ const [selectedAddressId, setSelectedAddressId] =
       setAccountLoading(false);
     }
   };
+
+  const handleStoreIdSearch = async () => {
+  const storeId = search.trim();
+
+  // Only search when the input contains an 8-digit Store ID.
+  if (!/^\d{8}$/.test(storeId)) {
+    return;
+  }
+
+  try {
+    setStoreSearchLoading(true);
+
+    const response = await searchStoreByStoreId(storeId);
+
+    if (response?.success && response?.data) {
+      router.push(
+        `/store?storeId=${encodeURIComponent(storeId)}`
+      );
+    } else {
+      alert("Store not found.");
+    }
+  } catch (error: any) {
+    alert(
+      error?.response?.data?.message ||
+        "Unable to find this store."
+    );
+  } finally {
+    setStoreSearchLoading(false);
+  }
+};
+
+useEffect(() => {
+  const storeId = search.trim();
+
+  // Sirf 8-digit numeric Store ID par search karo
+  if (!/^\d{8}$/.test(storeId)) return;
+
+  const timer = setTimeout(() => {
+    void handleStoreIdSearch();
+  }, 300);
+
+  return () => clearTimeout(timer);
+}, [search]);
 
   // ======================================================
   // FETCH LIKED STORES
@@ -372,7 +420,7 @@ const fetchAddresses = async () => {
     }
 
     const response = await axios.get(
-      "https://api.thover.in/v1/api/address/",
+      "http://localhost:5000/v1/api/address/",
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -394,6 +442,7 @@ const fetchAddresses = async () => {
 // Sirf first time mein primary address use karo.
 const savedAddress =
   localStorage.getItem("selectedAddress");
+  
 
 if (!savedAddress) {
   const primaryAddress = list.find(
@@ -414,6 +463,10 @@ if (!savedAddress) {
       "selectedAddress",
       JSON.stringify(primaryAddress)
     );
+    localStorage.setItem(
+  "customerAddressId",
+  primaryAddress._id
+);
   }
 }
 
@@ -438,25 +491,34 @@ const handleAddNewAddress = () => {
   setShowAddAddress(true);
 };
 
-const handleSelectAddress = (
-  address: UserAddress
-) => {
+
+
+const handleSelectAddress = (address: UserAddress) => {
+  if (!address?._id) return;
+
   setSelectedAddressId(address._id);
   setSelectedAddress(address);
 
-  // Refresh ke baad bhi selected address rahe
   localStorage.setItem(
     "selectedAddress",
     JSON.stringify(address)
   );
 
-  console.log(
-    "SELECTED ADDRESS:",
-    address
+  localStorage.setItem(
+    "customerAddressId",
+    address._id
+  );
+
+  window.dispatchEvent(
+    new CustomEvent("customerAddressChanged", {
+      detail: { addressId: address._id },
+    })
   );
 
   setShowAddressModal(false);
 };
+
+
 
   return (
     <>
@@ -570,35 +632,33 @@ const handleSelectAddress = (
               />
 
               <input
-                type="text"
-                value={search}
-                onChange={(e) =>
-                  onSearchChange(
-                    e.target.value
-                  )
-                }
-                placeholder="Search products, stores or categories..."
-                className="
-                  ml-5
-                  w-full
-                  bg-transparent
-                  text-[16px]
-                  text-[#101828]
-                  outline-none
-                  placeholder:text-[#7182A6]
-                "
-              />
+  type="text"
+  value={search}
+  onChange={(e) => onSearchChange(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter" && /^\d{8}$/.test(search.trim())) {
+      e.preventDefault();
+      void handleStoreIdSearch();
+    }
+  }}
+  placeholder="Search products, stores, categories or Store ID..."
+  className="
+    ml-5
+    w-full
+    bg-transparent
+    text-[16px]
+    text-[#101828]
+    outline-none
+    placeholder:text-[#7182A6]
+  "
+/>
 
-              {searchLoading && (
-                <Loader2
-                  size={20}
-                  className="
-                    shrink-0
-                    animate-spin
-                    text-[#6D28D9]
-                  "
-                />
-              )}
+             {(searchLoading || storeSearchLoading) && (
+  <Loader2
+    size={20}
+    className="shrink-0 animate-spin text-[#6D28D9]"
+  />
+)}
             </div>
           </div>
 
@@ -785,35 +845,33 @@ const handleSelectAddress = (
             />
 
             <input
-              type="text"
-              value={search}
-              onChange={(e) =>
-                onSearchChange(
-                  e.target.value
-                )
-              }
-              placeholder="Search products..."
-              className="
-                ml-3
-                w-full
-                bg-transparent
-                text-sm
-                text-[#101828]
-                outline-none
-                placeholder:text-[#7182A6]
-              "
-            />
+  type="text"
+  value={search}
+  onChange={(e) => onSearchChange(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter" && /^\d{8}$/.test(search.trim())) {
+      e.preventDefault();
+      void handleStoreIdSearch();
+    }
+  }}
+  placeholder="Search products or Store ID..."
+  className="
+    ml-3
+    w-full
+    bg-transparent
+    text-sm
+    text-[#101828]
+    outline-none
+    placeholder:text-[#7182A6]
+  "
+/>
 
-            {searchLoading && (
-              <Loader2
-                size={18}
-                className="
-                  shrink-0
-                  animate-spin
-                  text-[#6D28D9]
-                "
-              />
-            )}
+            {(searchLoading || storeSearchLoading) && (
+  <Loader2
+    size={18}
+    className="shrink-0 animate-spin text-[#6D28D9]"
+  />
+)}
           </div>
         </div>
       </header>

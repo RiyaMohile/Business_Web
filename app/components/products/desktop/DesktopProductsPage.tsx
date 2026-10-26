@@ -156,7 +156,7 @@ const fetchCityFromCoordinates = async (
       // ----------------------------------------------
 
       const response = await fetch(
-        "https://api.thover.in/v1/api/address/",
+        "http://localhost:5000/v1/api/address/",
         {
           method: "GET",
           headers: {
@@ -197,11 +197,34 @@ const fetchCityFromCoordinates = async (
       // PRIMARY ADDRESS
       // ----------------------------------------------
 
-      const selectedAddress =
-        addresses.find(
-          (address: any) =>
-            address?.isPrimary === true
-        ) || addresses[0];
+      const savedAddressId =
+  localStorage.getItem("customerAddressId");
+
+const savedAddressJSON =
+  localStorage.getItem("selectedAddress");
+
+let savedAddressFromStorage: any = null;
+
+try {
+  savedAddressFromStorage = savedAddressJSON
+    ? JSON.parse(savedAddressJSON)
+    : null;
+} catch {
+  localStorage.removeItem("selectedAddress");
+}
+
+const selectedAddress =
+  addresses.find(
+    (address: any) => address._id === savedAddressId
+  ) ||
+  addresses.find(
+    (address: any) =>
+      address._id === savedAddressFromStorage?._id
+  ) ||
+  addresses.find(
+    (address: any) => address?.isPrimary === true
+  ) ||
+  addresses[0];
 
         if (!selectedAddress?._id) {
   setShowAddressModal(true);
@@ -227,6 +250,24 @@ if (
         selectedAddress._id
       );
 
+      if (!selectedAddress?._id) {
+  setAddressId(null);
+  setProducts([]);
+  setShowAddressModal(true);
+  return;
+}
+
+setAddressId(selectedAddress._id);
+
+localStorage.setItem(
+  "customerAddressId",
+  selectedAddress._id
+);
+
+localStorage.setItem(
+  "selectedAddress",
+  JSON.stringify(selectedAddress)
+);
 
       // ----------------------------------------------
       // LOAD PRODUCTS
@@ -310,66 +351,95 @@ setProducts(newArrivalProducts);
     }
   };
 
+  // Reload products whenever Navbar address changes.
+useEffect(() => {
+  const handleAddressChange = (event: Event) => {
+    const customEvent = event as CustomEvent<{
+      addressId?: string;
+    }>;
+
+    const newAddressId = customEvent.detail?.addressId;
+
+    if (!newAddressId) return;
+
+    console.log(
+      "SELECTED ADDRESS CHANGED:",
+      newAddressId
+    );
+
+    setAddressId(newAddressId);
+    setSearch("");
+    setProducts([]);
+
+    void loadProducts(newAddressId);
+  };
+
+  window.addEventListener(
+    "customerAddressChanged",
+    handleAddressChange
+  );
+
+  return () => {
+    window.removeEventListener(
+      "customerAddressChanged",
+      handleAddressChange
+    );
+  };
+}, []);
+
 
   // ====================================================
   // SEARCH PRODUCTS
   // ====================================================
 
-  const handleSearch = async (
-    value: string
-  ) => {
-    setSearch(value);
+  
+const handleSearch = async (value: string) => {
+  setSearch(value);
 
+  const searchTerm = value.trim();
 
-    // ----------------------------------------------
-    // EMPTY SEARCH
-    // ----------------------------------------------
-
-    if (!value.trim()) {
-      if (addressId) {
-        await loadProducts(
-          addressId
-        );
-      }
-
-      return;
+  // Empty search: reload products for selected address
+  if (!searchTerm) {
+    if (addressId) {
+      await loadProducts(addressId);
     }
+    return;
+  }
 
+  // Address is required by the backend
+  if (!addressId) {
+    setError("Please select a delivery address.");
+    return;
+  }
 
-    try {
-      setSearchLoading(true);
-      setError("");
+  try {
+    setSearchLoading(true);
+    setError("");
 
-      const response =
-        await searchProducts(
-          value.trim(),
-          undefined,
-          undefined,
-          20
-        );
+    const response = await searchProducts(
+      searchTerm,
+      addressId,
+      undefined,
+      undefined,
+      20
+    );
 
+    console.log("SEARCH RESPONSE:", response);
 
-      setProducts(
-        response?.data?.posts || []
-      );
+    setProducts(response?.data?.posts || []);
+  } catch (error: any) {
+    console.error(
+      "SEARCH ERROR:",
+      error.response?.data || error.message
+    );
 
-    } catch (error: any) {
-      console.error(
-        "SEARCH ERROR:",
-        error
-      );
+    setError(error.message || "Search failed.");
+    setProducts([]);
+  } finally {
+    setSearchLoading(false);
+  }
+};
 
-      setError(
-        error?.message ||
-          "Search failed."
-      );
-
-      setProducts([]);
-
-    } finally {
-      setSearchLoading(false);
-    }
-  };
 
 
   // ====================================================
@@ -377,18 +447,18 @@ setProducts(newArrivalProducts);
   // ====================================================
 
   const handleAddressCreated = async (
-    newAddressId: string
-  ) => {
-    setAddressId(
-      newAddressId
-    );
+  newAddressId: string
+) => {
+  setAddressId(newAddressId);
+  setShowAddressModal(false);
 
-    setShowAddressModal(false);
+  localStorage.setItem(
+    "customerAddressId",
+    newAddressId
+  );
 
-    await loadProducts(
-      newAddressId
-    );
-  };
+  await loadProducts(newAddressId);
+};
 
 
   // ====================================================

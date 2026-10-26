@@ -29,7 +29,7 @@ interface AddressForm {
 }
 
 const API_URL =
-  "https://api.thover.in/v1/api";
+  "http://localhost:5000/v1/api";
 
 const INITIAL_ADDRESS: AddressForm = {
   name: "",

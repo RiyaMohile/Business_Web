@@ -106,7 +106,7 @@ setCheckingAuth(false);
       // ========================================
 
       const response = await fetch(
-        "https://api.thover.in/v1/api/address/",
+        "http://localhost:5000/v1/api/address/",
         {
           method: "GET",
 
@@ -147,12 +147,49 @@ setCheckingAuth(false);
       // ADDRESS EXISTS
       // ========================================
 
-      const selectedAddress =
+      
+const savedAddressId = localStorage.getItem("customerAddressId");
+
+const savedAddressJSON = localStorage.getItem("selectedAddress");
+
+let savedAddressFromStorage: any = null;
+
+try {
+  savedAddressFromStorage = savedAddressJSON
+    ? JSON.parse(savedAddressJSON)
+    : null;
+} catch {
+  localStorage.removeItem("selectedAddress");
+}
+
+const selectedAddress =
+  addresses.find(
+    (address: any) => address._id === savedAddressId
+  ) ||
   addresses.find(
     (address: any) =>
-      address?.isPrimary === true
+      address._id === savedAddressFromStorage?._id
+  ) ||
+  addresses.find(
+    (address: any) => address?.isPrimary === true
   ) ||
   addresses[0];
+
+if (!selectedAddress?._id) {
+  setAddressId(null);
+  setProducts([]);
+  setShowAddressModal(true);
+  return;
+}
+
+setAddressId(selectedAddress._id);
+
+localStorage.setItem("customerAddressId", selectedAddress._id);
+localStorage.setItem(
+  "selectedAddress",
+  JSON.stringify(selectedAddress)
+);
+
 
 if (!selectedAddress?._id) {
   setShowAddressModal(true);
@@ -236,6 +273,39 @@ setProducts(newArrivalProducts);
     }
   };
 
+  
+useEffect(() => {
+  const handleAddressChange = (event: Event) => {
+    const customEvent =
+      event as CustomEvent<{ addressId?: string }>;
+
+    const newAddressId = customEvent.detail?.addressId;
+
+    if (!newAddressId) return;
+
+    console.log("SELECTED ADDRESS CHANGED:", newAddressId);
+
+    setAddressId(newAddressId);
+    setSearch("");
+    setProducts([]);
+
+    void loadProducts(newAddressId);
+  };
+
+  window.addEventListener(
+    "customerAddressChanged",
+    handleAddressChange
+  );
+
+  return () => {
+    window.removeEventListener(
+      "customerAddressChanged",
+      handleAddressChange
+    );
+  };
+}, []);
+
+
   const handleSearch = async (
   value: string
 ) => {
@@ -254,13 +324,18 @@ setProducts(newArrivalProducts);
     setSearchLoading(true);
     setError("");
 
-    const response =
-      await searchProducts(
-        value.trim(),
-        undefined,
-        undefined,
-        20
-      );
+    if (!addressId) {
+  setError("Please select a delivery address.");
+  return;
+}
+
+const response = await searchProducts(
+  value.trim(),
+  addressId,
+  undefined,
+  undefined,
+  20
+);
 
     console.log(
       "SEARCH RESPONSE:",
@@ -270,47 +345,34 @@ setProducts(newArrivalProducts);
     setProducts(
       response?.data?.posts || []
     );
-  } catch (error: any) {
-    console.error(
-      "SEARCH ERROR:",
-      error
-    );
+  
+} catch (error: any) {
+  console.error("SEARCH ERROR:", error.message);
+  setError(error.message || "Search failed.");
+} finally {
+  setSearchLoading(false);
+}
 
-    setError(
-      error?.message ||
-        "Search failed."
-    );
-
-    setProducts([]);
-  } finally {
-    setSearchLoading(false);
-  }
 };
 
   // ==========================================
   // ADDRESS CREATED
   // ==========================================
 
-  const handleAddressCreated = async (
-    newAddressId: string
-  ) => {
-    console.log(
-      "NEW ADDRESS ID:",
-      newAddressId
-    );
+  
+const handleAddressCreated = async (
+  newAddressId: string
+) => {
+  console.log("NEW ADDRESS ID:", newAddressId);
 
-    setAddressId(
-      newAddressId
-    );
+  setAddressId(newAddressId);
+  setShowAddressModal(false);
 
-    setShowAddressModal(false);
+  localStorage.setItem("customerAddressId", newAddressId);
 
-    // Now fetch products using
-    // newly created address
-    await loadProducts(
-      newAddressId
-    );
-  };
+  await loadProducts(newAddressId);
+};
+
 
   if (checkingAuth) {
   return (

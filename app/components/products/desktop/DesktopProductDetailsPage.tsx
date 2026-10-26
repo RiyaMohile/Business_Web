@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import api from "../../../services/api";
 
 import {
   ArrowLeft,
@@ -89,7 +90,12 @@ const [reviewSubmitting, setReviewSubmitting] =
   useState(false);
 
 const [reviewError, setReviewError] = useState("");
-const [comingSoonModal, setComingSoonModal] = useState(false);
+const [buyNowLoading, setBuyNowLoading] = useState(false);
+
+const [deliveryError, setDeliveryError] = useState<{
+  title: string;
+  message: string;
+} | null>(null);
 
 
   // ====================================================
@@ -474,9 +480,117 @@ const handleSubmitReview = async () => {
   // BUY NOW
   // ====================================================
 
- const handleBuyNow = () => {
-  setComingSoonModal(true);
+ 
+const handleBuyNow = async () => {
+  if (buyNowLoading || !product?._id) return;
+
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    router.push("/login");
+    return;
+  }
+
+  const customerAddressId =
+    localStorage.getItem("customerAddressId");
+
+  if (!customerAddressId) {
+    setDeliveryError({
+      title: "Delivery Address Required",
+      message:
+        "Please select your delivery address before placing an order.",
+    });
+    return;
+  }
+
+  const mongoStoreId = product.store?._id;
+
+  if (!mongoStoreId) {
+    setDeliveryError({
+      title: "Store Not Found",
+      message:
+        "Store information is unavailable. Please try again later.",
+    });
+    return;
+  }
+
+  try {
+    setBuyNowLoading(true);
+
+    // Validate store online status and 20 km delivery range
+    await api.post(
+      "http://localhost:5000/v1/api/store/validate-store-delivery",
+      {
+        storeId: String(mongoStoreId),
+        customerAddressId,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    // Validation successful: prepare checkout data
+    const checkoutData = {
+      products: [
+        {
+          postId: String(product._id),
+          topic: product.topic,
+          image: product.media?.[0]?.mediaUrl || "",
+          quantity,
+          size: selectedSize,
+          price: Number(finalPrice),
+          storeId: String(mongoStoreId),
+        },
+      ],
+      address: null,
+      deliveryCharge: 150,
+      storeId: String(mongoStoreId),
+    };
+
+    localStorage.setItem(
+      "checkoutData",
+      JSON.stringify(checkoutData)
+    );
+
+    router.push("/checkout");
+  } catch (error: any) {
+    console.error(
+      "BUY NOW DELIVERY VALIDATION ERROR:",
+      error?.response?.data || error
+    );
+
+    const errorData = error?.response?.data;
+    const errorCode = errorData?.code;
+
+    if (errorCode === "STORE_OFFLINE") {
+      setDeliveryError({
+        title: "Store Currently Offline",
+        message:
+          errorData?.message ||
+          "This store is currently offline. Please try another store.",
+      });
+    } else if (errorCode === "OUT_OF_DELIVERY_RANGE") {
+      setDeliveryError({
+        title: "Delivery Not Available",
+        message:
+          errorData?.message ||
+          "This store is outside your 20 km delivery range. Please select another store.",
+      });
+    } else {
+      setDeliveryError({
+        title: "Unable to Continue",
+        message:
+          errorData?.message ||
+          "Unable to verify store delivery. Please try again.",
+      });
+    }
+  } finally {
+    setBuyNowLoading(false);
+  }
 };
+
 
     const handleAddToCart = async () => {
   if (addingToCart) return;
@@ -1032,13 +1146,23 @@ const handleSubmitReview = async () => {
 {addingToCart ? "Adding..." : "Add to Cart"}
   </button>
 
-  <button
-    type="button"
-    onClick={handleBuyNow}
-    className="flex-1 rounded-xl bg-black px-6 py-4 font-semibold text-white"
-  >
-    Buy Now
-  </button>
+  
+<button
+  type="button"
+  onClick={handleBuyNow}
+  disabled={buyNowLoading}
+  className="flex-1 rounded-xl bg-gradient-to-r from-[#7135E8] to-[#6D28D9] px-6 py-4 font-semibold text-white transition hover:from-[#6428D8] hover:to-[#5B21B6] disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {buyNowLoading ? (
+    <>
+      <Loader2 className="mr-2 inline-block h-5 w-5 animate-spin" />
+      Checking Delivery...
+    </>
+  ) : (
+    "Buy Now"
+  )}
+</button>
+
 </div>
 
           </div>
@@ -1543,49 +1667,61 @@ const handleSubmitReview = async () => {
   
 )}
 
-{comingSoonModal && (
+
+{deliveryError && (
   <div
-    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4"
-    onClick={() => setComingSoonModal(false)}
+    className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#1B1033]/60 px-4 py-6 backdrop-blur-sm"
+    onClick={() => setDeliveryError(null)}
   >
     <div
-      className="w-full max-w-[380px] rounded-[24px] bg-white p-7 text-center shadow-2xl"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="delivery-error-title"
+      className="w-full max-w-[390px] overflow-hidden rounded-3xl bg-white shadow-2xl"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#F3E8FF]">
-        <span className="text-3xl">🚀</span>
+      <div className="flex flex-col items-center px-6 pb-5 pt-8 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#F3E8FF]">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            className="h-8 w-8 text-[#7135E8]"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path
+              d="M12 8v4m0 4h.01"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
+
+        <h2
+          id="delivery-error-title"
+          className="mt-5 text-xl font-bold text-[#32106A]"
+        >
+          {deliveryError.title}
+        </h2>
+
+        <p className="mt-3 text-sm leading-6 text-[#71669A]">
+          {deliveryError.message}
+        </p>
       </div>
 
-      <h2 className="text-[24px] font-bold text-[#101828]">
-        Thover Coming Soon
-      </h2>
-
-      <p className="mt-2 text-[14px] leading-6 text-[#7182A6]">
-        We are working hard to bring Thover to you.
-        Stay tuned!
-      </p>
-
-      <button
-        type="button"
-        onClick={() => setComingSoonModal(false)}
-        className="
-          mt-6
-          h-[46px]
-          w-full
-          rounded-[13px]
-          bg-gradient-to-r
-          from-[#7135E8]
-          to-[#6931D8]
-          text-[15px]
-          font-bold
-          text-white
-        "
-      >
-        Okay
-      </button>
+      <div className="px-6 pb-6">
+        <button
+          type="button"
+          onClick={() => setDeliveryError(null)}
+          className="w-full rounded-xl bg-gradient-to-r from-[#7135E8] to-[#6D28D9] px-5 py-3.5 text-sm font-semibold text-white shadow-md transition hover:from-[#6428D8] hover:to-[#5B21B6]"
+        >
+          Okay, Got It
+        </button>
+      </div>
     </div>
   </div>
 )}
+
 </main>
   );
 }

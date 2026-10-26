@@ -54,7 +54,7 @@ interface LatLng {
 
 declare global {
   interface Window {
-    Cashfree: any;
+     Razorpay: any;
   }
 }
 
@@ -423,27 +423,20 @@ export default function CheckoutPage() {
   }, [address, geocodedAddresses]);
 
   // ==========================================
-  // LOAD CASHFREE SDK
-  // ==========================================
+// LOAD RAZORPAY SDK
+// ==========================================
+useEffect(() => {
+  const scriptId = "razorpay-checkout-sdk";
 
-  useEffect(() => {
-    const existingScript =
-      document.getElementById(
-        "cashfree-sdk"
-      );
+  if (document.getElementById(scriptId)) return;
 
-    if (existingScript) return;
+  const script = document.createElement("script");
+  script.id = scriptId;
+  script.src = "https://checkout.razorpay.com/v1/checkout.js";
+  script.async = true;
 
-    const script =
-      document.createElement("script");
-
-    script.id = "cashfree-sdk";
-    script.src =
-      "https://sdk.cashfree.com/js/v3/cashfree.js";
-    script.async = true;
-
-    document.body.appendChild(script);
-  }, []);
+  document.body.appendChild(script);
+}, []);
 
   // ==========================================
   // LOAD CHECKOUT DATA
@@ -498,7 +491,7 @@ export default function CheckoutPage() {
         const token = localStorage.getItem("token");
 
         const response = await fetch(
-          `https://api.thover.in/v1/api/post/post/${firstPostId}`,
+          `http://localhost:5000/v1/api/post/post/${firstPostId}`,
           {
             headers: {
               ...(token
@@ -509,9 +502,12 @@ export default function CheckoutPage() {
           }
         );
 
-        const data = await response.json();
+        
+const data = await response.json();
 
-        console.log("POST DETAILS:", data);
+console.log("PAYMENT HTTP STATUS:", response.status);
+console.log("PAYMENT RESPONSE:", data);
+
 
         if (!response.ok) return null;
 
@@ -604,7 +600,7 @@ export default function CheckoutPage() {
       }
 
       const response = await fetch(
-        "https://api.thover.in/v1/api/address",
+        "http://localhost:5000/v1/api/address",
         {
           method: "GET",
           headers: {
@@ -796,7 +792,7 @@ export default function CheckoutPage() {
       }
 
       const response = await fetch(
-        "https://api.thover.in/v1/api/coupon/my-coupons?status=active",
+        "http://localhost:5000/v1/api/coupon/my-coupons?status=active",
         {
           method: "GET",
           headers: {
@@ -903,122 +899,190 @@ export default function CheckoutPage() {
   };
 
   // ==========================================
-  // PROCEED TO CASHFREE
-  // ==========================================
+// PROCEED TO RAZORPAY
+// ==========================================
+const handlePayment = async () => {
+  if (paymentLoading || storeLocationLoading) return;
 
-  const handlePayment = async () => {
-    if (paymentLoading || storeLocationLoading) return;
+  if (!products.length) {
+    alert("No products found.");
+    return;
+  }
 
-    if (!products.length) {
-      alert("No products found.");
-      return;
-    }
+  if (!address) {
+    alert("Please select delivery address.");
+    return;
+  }
 
-    if (!address) {
-      alert(
-        "Please select delivery address."
-      );
-      return;
-    }
+  const token = localStorage.getItem("token");
 
-    try {
-      setPaymentLoading(true);
+  if (!token) {
+    alert("Please login again.");
+    router.push("/login");
+    return;
+  }
 
-      const token =
-        localStorage.getItem("token");
+  try {
+    setPaymentLoading(true);
 
-      if (!token) {
-        alert("Please login again.");
-        return;
-      }
+    // 1. Load Razorpay SDK if it is not loaded yet.
+    if (!window.Razorpay) {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement("script");
 
-      // IMPORTANT:
-      // Your backend checks that all products
-      // belong to SAME STORE.
-      const response =
-        await fetch(
-          "https://api.thover.in/v2/api/payment/create",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
+        script.src =
+          "https://checkout.razorpay.com/v1/checkout.js";
 
-              Authorization:
-                `Bearer ${token}`,
-            },
+        script.onload = () => resolve();
+        script.onerror = () =>
+          reject(new Error("Failed to load Razorpay SDK."));
 
-            body: JSON.stringify({
-              cartId: cartId || null,
-
-              products: products.map((item) => ({
-                postId: item.postId,
-                quantity: item.quantity,
-                size: item.size || null,
-              })),
-
-              couponCodeId: couponCodeId,
-              deliveryCharge: deliveryCharge,
-
-              appId:
-                process.env.NEXT_PUBLIC_CASHFREE_APP_ID,
-            }),
-          }
-        );
-
-      const data =
-        await response.json();
-
-      console.log(
-        "CREATE PAYMENT RESPONSE:",
-        data
-      );
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.message ||
-            "Failed to create payment"
-        );
-      }
-
-      const paymentSessionId =
-        data.cashfree
-          ?.paymentSessionId;
-
-      if (!paymentSessionId) {
-        throw new Error(
-          "Payment session ID not received."
-        );
-      }
-
-      // ========================================
-      // CASHFREE
-      // ========================================
-
-      const cashfree =
-        window.Cashfree({
-          mode: "sandbox",
-        });
-
-      await cashfree.checkout({
-        paymentSessionId,
-        redirectTarget: "_self",
+        document.body.appendChild(script);
       });
-
-    } catch (error: any) {
-      console.error(
-        "PAYMENT ERROR:",
-        error
-      );
-
-      alert(
-        error?.message ||
-          "Unable to start payment."
-      );
-    } finally {
-      setPaymentLoading(false);
     }
-  };
+
+    // 2. Create Razorpay order on backend.
+    const response = await fetch(
+      "http://localhost:5000/v2/api/payments/create",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          cartId: cartId || null,
+
+          products: products.map((item) => ({
+            postId: item.postId,
+            quantity: item.quantity,
+            size: item.size || null,
+          })),
+
+          couponCodeId: couponCodeId,
+          deliveryCharge: deliveryCharge,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    console.log("RAZORPAY CREATE RESPONSE:", data);
+
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.message || "Failed to create Razorpay order."
+      );
+    }
+
+    if (
+      !data.razorpayOrderId ||
+      !data.keyId ||
+      !data.amount
+    ) {
+      throw new Error(
+        "Razorpay order details are missing."
+      );
+    }
+
+    // 3. Open Razorpay Checkout.
+    const options = {
+      key: data.keyId,
+      amount: data.amount,
+      currency: data.currency || "INR",
+      name: "Thover",
+      description: "Product purchase",
+      order_id: data.razorpayOrderId,
+
+      prefill: {
+        name: data.customer?.name || "",
+        email: data.customer?.email || "",
+        contact: data.customer?.contact || "",
+      },
+
+      theme: {
+        color: "#6D28D9",
+      },
+
+     handler: async (paymentResponse: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}) => {
+  console.log("CHECKOUT HANDLER HIT:", paymentResponse);
+
+  try {
+    const verifyUrl =
+      "http://localhost:5000/v2/api/payments/verify";
+
+    console.log("CALLING VERIFY API:", verifyUrl);
+
+    const verifyResponse = await fetch(verifyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(paymentResponse),
+    });
+
+    const verifyData = await verifyResponse.json();
+
+    console.log("VERIFY STATUS:", verifyResponse.status);
+    console.log("VERIFY RESPONSE:", verifyData);
+
+    if (!verifyResponse.ok || !verifyData.success) {
+      throw new Error(
+        verifyData.message || "Payment verification failed."
+      );
+    }
+
+    alert("Payment verified successfully.");
+  } catch (error) {
+    console.error("VERIFY ERROR:", error);
+    alert("Payment verify nahi hua. Console check karo.");
+  } finally {
+    setPaymentLoading(false);
+  }
+},
+
+      modal: {
+        ondismiss: () => {
+          setPaymentLoading(false);
+        },
+      },
+    };
+
+    const razorpay = new window.Razorpay(options);
+
+    razorpay.on(
+      "payment.failed",
+      (paymentError: any) => {
+        console.error(
+          "RAZORPAY PAYMENT FAILED:",
+          paymentError
+        );
+
+        setPaymentLoading(false);
+
+        alert(
+          paymentError?.error?.description ||
+            "Payment failed. Please try again."
+        );
+      }
+    );
+
+    razorpay.open();
+  } catch (error: any) {
+    console.error("RAZORPAY ERROR:", error);
+
+    alert(
+      error?.message || "Unable to start Razorpay payment."
+    );
+
+    setPaymentLoading(false);
+  }
+};
 
   // ==========================================
   // LOADING

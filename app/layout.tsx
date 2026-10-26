@@ -13,25 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: {
-    default: "Thover",
-    template: "%s | Thover",
-  },
-
+  title: "Thover",
   description:
     "Thover is a hyperlocal marketplace platform that helps users discover nearby businesses, products, services, and shopping experiences.",
-
-  keywords: [
-    "hyperlocal marketplace",
-    "Thover marketplace",
-    "local marketplace",
-    "hyperlocal shopping",
-    "local sellers",
-    "shop local",
-    "products near you",
-    "local businesses",
-  ],  
-
   icons: {
     icon: "/icon.png",
   },

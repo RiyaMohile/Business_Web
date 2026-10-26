@@ -12,6 +12,7 @@ import {
   Loader2,
   X,
   UserRound,
+    Phone,
 } from "lucide-react";
 
 import { getStoreDetailsWithProducts, toggleStoreLike, getLikedStores } from "../../services/storeApi";
@@ -22,6 +23,7 @@ interface Store {
   storeId: string;
   storeName: string;
   category: string;
+  phoneNumber?: string | null;
   address?: {
     addressId?: string;
     area?: string;
@@ -182,6 +184,11 @@ const [isLiked, setIsLiked] = useState(false);
 const [likeLoading, setLikeLoading] = useState(false);
 const [likeCount, setLikeCount] = useState(0);
 
+const [deliveryError, setDeliveryError] = useState<{
+  title: string;
+  message: string;
+} | null>(null);
+
 const handleLikeStore = async () => {
   // User logged in nahi hai
   if (!isLoggedIn) {
@@ -233,6 +240,16 @@ const handleLikeStore = async () => {
   }
 };
 
+const handleContactStore = () => {
+  const phoneNumber = store?.phoneNumber?.trim();
+
+  if (!phoneNumber) {
+    alert("Store contact number is not available.");
+    return;
+  }
+
+  window.location.href = `tel:${phoneNumber}`;
+};
 
 
 const handleProductClick = (productId: string) => {
@@ -357,7 +374,7 @@ const handleShareStore = async () => {
       }
 
       const response = await fetch(
-        "https://api.thover.in/v1/api/address/",
+        "http://localhost:5000/v1/api/address/",
         {
           method: "GET",
           headers: {
@@ -442,6 +459,8 @@ const handleShareStore = async () => {
     setStore(storeData);
     setProducts(productData);
 
+    await checkStoreAvailability(storeId);
+
     // Store ka city directly use karo
     if (storeData?.address?.city) {
       setUserCity(storeData.address.city);
@@ -495,7 +514,7 @@ const handleShareStore = async () => {
         newAddressId
       ) {
         const response = await fetch(
-          "https://api.thover.in/v1/api/address/",
+          "http://localhost:5000/v1/api/address/",
           {
             method: "GET",
             headers: {
@@ -601,6 +620,71 @@ const handleShareStore = async () => {
       return matchesSearch && matchesCategory;
     });
   }, [products, search, selectedCategory]);
+
+
+  const checkStoreAvailability = async (currentStoreId: string) => {
+  const token = localStorage.getItem("token");
+
+  // Delivery distance needs a logged-in customer's address.
+  if (!token) return;
+
+  const customerAddressId =
+    localStorage.getItem("customerAddressId") ||
+    localStorage.getItem("addressId");
+
+  if (!customerAddressId) {
+    // Keep the existing address flow unchanged.
+    return;
+  }
+
+  try {
+    await fetch(
+      "http://localhost:5000/v1/api/store/validate-store-delivery",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storeId: currentStoreId,
+          customerAddressId,
+        }),
+      }
+    );
+  } catch (error: any) {
+    let errorData: any = {};
+
+    // Read the backend error response.
+    try {
+      if (error instanceof Response) {
+        errorData = await error.json();
+      }
+    } catch {
+      // Keep fallback error messages below.
+    }
+
+    if (errorData.code === "STORE_OFFLINE") {
+      setDeliveryError({
+        title: "Store Currently Offline",
+        message:
+          errorData.message ||
+          "This store is currently offline. Please try another store.",
+      });
+    } else if (
+      errorData.code === "OUT_OF_DELIVERY_RANGE"
+    ) {
+      setDeliveryError({
+        title: "Delivery Not Available",
+        message:
+          errorData.message ||
+          "This store is outside your 20 km delivery range.",
+      });
+    } else {
+      console.error("STORE AVAILABILITY CHECK ERROR:", error);
+    }
+  }
+};
 
   // ======================================================
   // STORE ID MISSING
@@ -783,6 +867,17 @@ const handleShareStore = async () => {
               </div>
 
              <div className="flex shrink-0 items-center gap-4">
+              {/* Contact Store */}
+<button
+  type="button"
+  onClick={handleContactStore}
+  disabled={!store.phoneNumber}
+  aria-label="Call store"
+  title="Contact Store"
+  className="flex items-center justify-center text-[#98A2B3] transition hover:scale-110 disabled:cursor-not-allowed disabled:opacity-40"
+>
+  <Phone className="h-6 w-6" />
+</button>
   {/* Like */}
   <button
     type="button"
@@ -976,6 +1071,41 @@ const handleShareStore = async () => {
           Close
         </button>
       </div>
+    </div>
+  </div>
+)}
+
+
+{deliveryError && (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4">
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="store-delivery-title"
+      className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+    >
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
+        <X className="h-7 w-7 text-red-500" />
+      </div>
+
+      <h2
+        id="store-delivery-title"
+        className="mt-4 text-center text-xl font-bold text-gray-900"
+      >
+        {deliveryError.title}
+      </h2>
+
+      <p className="mt-2 text-center text-sm leading-6 text-gray-600">
+        {deliveryError.message}
+      </p>
+
+      <button
+        type="button"
+        onClick={() => setDeliveryError(null)}
+        className="mt-6 w-full rounded-xl bg-[#6D28D9] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#5B21B6]"
+      >
+        Okay
+      </button>
     </div>
   </div>
 )}

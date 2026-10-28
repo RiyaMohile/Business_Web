@@ -11,24 +11,20 @@ import {
   type SubscriptionPlan,
 } from "../../services/subscriptionService";
 
-declare global {
-  interface Window {
-    Razorpay?: new (
-      options: Record<string, unknown>
-    ) => {
-      open: () => void;
-      on: (
-        event: string,
-        callback: (response: {
-          error?: {
-            description?: string;
-            reason?: string;
-          };
-        }) => void
-      ) => void;
-    };
-  }
-}
+// Razorpay's checkout script adds this global; typed locally so it does not
+// clash with the customer checkout page's own global declaration.
+const getRazorpay = () =>
+  (window as unknown as { Razorpay?: new (
+    options: Record<string, unknown>
+  ) => {
+    open: () => void;
+    on: (
+      event: string,
+      callback: (response: {
+        error?: { description?: string; reason?: string };
+      }) => void
+    ) => void;
+  } }).Razorpay;
 
 function PlansContent() {
   const router = useRouter();
@@ -84,7 +80,7 @@ function PlansContent() {
   return;
 }
 
-if (!window.Razorpay) {
+if (!getRazorpay()) {
   setError(
     "Payment checkout failed to load. Please refresh the page and try again."
   );
@@ -111,7 +107,7 @@ if (!window.Razorpay) {
       }
 
       // Step 2: Razorpay checkout open karo.
-      const razorpay = new window.Razorpay({
+      const razorpay = new (getRazorpay()!)({
         key: order.keyId,
         amount: order.amount,
         currency: order.currency || "INR",

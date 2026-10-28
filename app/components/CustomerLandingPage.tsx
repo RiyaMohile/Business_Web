@@ -70,7 +70,7 @@ export default function CustomerLandingPage() {
           <div className="mt-3 w-full shrink-0">
             <button
   type="button"
-  onClick={handleComingSoon}
+  onClick={() => router.push("/login")}
               className="
                 flex
                 h-[56px]

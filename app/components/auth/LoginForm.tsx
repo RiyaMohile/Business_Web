@@ -5,6 +5,10 @@ import {
   LockKeyhole,
   Zap,
   Smartphone,
+  Eye,
+  EyeOff,
+  UserRound,
+  ArrowRight,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -12,6 +16,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import AlertBox from "../common/AlertBox";
 import { useAlert } from "../../hooks/useAlert";
+import api from "../../services/api";
 
 import {
   sendLoginOTP,
@@ -35,6 +40,11 @@ export default function LoginForm() {
 
   const [mobile, setMobile] =
     useState("");
+
+    const [loginMode, setLoginMode] = useState<"otp" | "password">("otp");
+const [username, setUsername] = useState("");
+const [password, setPassword] = useState("");
+const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] =
     useState(false);
@@ -254,6 +264,63 @@ export default function LoginForm() {
     }
   };
 
+  
+const handlePasswordLogin = async () => {
+  if (!username.trim() || !password) {
+    showAlert("Please enter username and password.", "warning");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    let deviceId = localStorage.getItem("deviceId");
+
+    if (!deviceId) {
+      const deviceResponse = await registerDevice();
+      const newDeviceId = deviceResponse?.device?.deviceId;
+
+      if (!deviceResponse?.status || !newDeviceId) {
+        showAlert("Unable to register device.", "error");
+        return;
+      }
+
+      deviceId = newDeviceId;
+      localStorage.setItem("deviceId", newDeviceId);
+    }
+
+    const { data } = await api.post("/auth/login", {
+      username: username.trim(),
+      password,
+      deviceId,
+      platform: "business",
+      deviceType: "web",
+    });
+
+    if (!data?.success || !data?.token) {
+      showAlert(data?.message || "Login failed.", "error");
+      return;
+    }
+
+    localStorage.setItem("token", data.token);
+
+    if (data.userId) {
+      localStorage.setItem("userId", data.userId);
+    }
+
+    router.replace("/products");
+  } catch (error: any) {
+    showAlert(
+      error?.response?.data?.message ||
+        "Invalid username or password.",
+      "error"
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
+
 
   /* ==========================================
      AUTH CHECK SCREEN
@@ -277,13 +344,12 @@ export default function LoginForm() {
 
       <div
         className="
-          flex
-          min-h-[100dvh]
-          w-full
-          flex-col
-          overflow-hidden
-          bg-white
-        "
+  flex
+  min-h-[100dvh]
+  w-full
+  flex-col
+  bg-white
+"
       >
 
         {/* =====================================
@@ -294,7 +360,7 @@ export default function LoginForm() {
           className="
             relative
             flex
-            h-[245px]
+            h-[140px] sm:h-[170px]
             shrink-0
             flex-col
             items-center
@@ -357,9 +423,9 @@ export default function LoginForm() {
             flex
             flex-1
             flex-col
-            px-6
-            pb-8
-            sm:px-10
+            px-5
+pb-4
+sm:px-10
           "
         >
 
@@ -379,121 +445,142 @@ export default function LoginForm() {
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Login using OTP
-            </p>
+  {loginMode === "otp"
+    ? "Login using OTP"
+    : "Login using username and password"}
+</p>
 
           </div>
 
 
-          {/* =================================
-              MOBILE NUMBER
-          ================================= */}
+{loginMode === "otp" ? (
+  <>
+    {/* MOBILE NUMBER */}
+    <div className="mt-8">
+      <div className="flex h-14 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white transition focus-within:border-[#6D28D9] focus-within:ring-4 focus-within:ring-[#6D28D9]/10">
+        <div className="flex shrink-0 items-center border-r border-slate-200 px-4 text-sm font-semibold text-slate-700">
+          +91
+        </div>
 
-          <div className="mt-8">
+        <Input
+          type="tel"
+          inputMode="numeric"
+          maxLength={10}
+          value={mobile}
+          onChange={handleMobileChange}
+          placeholder="Enter Mobile Number"
+          className="h-full min-w-0 flex-1 border-0 bg-transparent px-4 text-base shadow-none outline-none focus-visible:ring-0"
+        />
+      </div>
+    </div>
 
-            <div
-              className="
-                flex
-                h-14
-                w-full
-                overflow-hidden
-                rounded-2xl
-                border
-                border-slate-200
-                bg-white
-                transition
-                focus-within:border-[#6D28D9]
-                focus-within:ring-4
-                focus-within:ring-[#6D28D9]/10
-              "
-            >
+    {/* SEND OTP */}
+    <Button
+      onClick={sendOTP}
+      disabled={loading || mobile.length !== 10}
+      className="mt-5 flex h-auto w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#5B21B6] px-4 py-3 text-base font-semibold text-white shadow-[0_10px_25px_rgba(109,40,217,0.18)] transition hover:from-[#6D28D9] hover:to-[#4C1D95] disabled:opacity-50"
+    >
+      {loading ? (
+        "Sending..."
+      ) : (
+        <>
+          <Smartphone className="mr-2 h-5 w-5" />
+          Send OTP
+        </>
+      )}
+    </Button>
 
-              {/* COUNTRY CODE */}
+    {/* SWITCH TO PASSWORD LOGIN */}
+    <button
+      type="button"
+      onClick={() => setLoginMode("password")}
+      className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-[#B98BFF] bg-white px-4 py-3 font-semibold text-[#6D28D9] transition hover:bg-[#FAF7FF]"
+    >
+      <LockKeyhole className="h-5 w-5" />
+      Login with Username &amp; Password
+    </button>
+  </>
+) : (
+  <>
+    {/* USERNAME */}
+    <div className="mt-8">
+      <label className="mb-2 block text-sm font-medium text-slate-700">
+        Username
+      </label>
 
-              <div
-                className="
-                  flex
-                  shrink-0
-                  items-center
-                  border-r
-                  border-slate-200
-                  px-4
-                  text-sm
-                  font-semibold
-                  text-slate-700
-                "
-              >
-                +91
-              </div>
+      <div className="flex h-14 items-center rounded-2xl border border-slate-200 focus-within:border-[#6D28D9] focus-within:ring-4 focus-within:ring-[#6D28D9]/10">
+        <UserRound className="ml-4 h-5 w-5 shrink-0 text-[#6D28D9]" />
 
+        <Input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Enter username"
+          autoComplete="username"
+          className="h-full min-w-0 flex-1 border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
+        />
+      </div>
+    </div>
 
-              {/* INPUT */}
+    {/* PASSWORD */}
+    <div className="mt-4">
+      <label className="mb-2 block text-sm font-medium text-slate-700">
+        Password
+      </label>
 
-              <Input
-                type="tel"
-                inputMode="numeric"
-                maxLength={10}
-                value={mobile}
-                onChange={handleMobileChange}
-                placeholder="Enter Mobile Number"
-                className="
-                  h-full
-                  min-w-0
-                  flex-1
-                  border-0
-                  bg-transparent
-                  px-4
-                  text-base
-                  shadow-none
-                  outline-none
-                  focus-visible:ring-0
-                "
-              />
+      <div className="flex h-14 items-center rounded-2xl border border-slate-200 focus-within:border-[#6D28D9] focus-within:ring-4 focus-within:ring-[#6D28D9]/10">
+        <LockKeyhole className="ml-4 h-5 w-5 shrink-0 text-[#6D28D9]" />
 
-            </div>
+        <Input
+          type={showPassword ? "text" : "password"}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Enter password"
+          autoComplete="current-password"
+          className="h-full min-w-0 flex-1 border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
+        />
 
-          </div>
+        <button
+          type="button"
+          onClick={() => setShowPassword((prev) => !prev)}
+          className="mr-3 shrink-0 text-[#6D28D9]"
+          aria-label={showPassword ? "Hide password" : "Show password"}
+        >
+          {showPassword ? (
+            <EyeOff className="h-5 w-5" />
+          ) : (
+            <Eye className="h-5 w-5" />
+          )}
+        </button>
+      </div>
+    </div>
 
+    {/* CONFIRM LOGIN */}
+    <Button
+      onClick={handlePasswordLogin}
+      disabled={loading || !username.trim() || !password}
+      className="mt-5 flex h-auto w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#5B21B6] px-4 py-3 font-semibold text-white transition hover:from-[#6D28D9] hover:to-[#4C1D95] disabled:opacity-50"
+    >
+      {loading ? (
+        "Signing in..."
+      ) : (
+        <>
+          Confirm Login
+          <ArrowRight className="ml-2 h-5 w-5" />
+        </>
+      )}
+    </Button>
 
-          {/* =================================
-              SEND OTP
-          ================================= */}
-
-          <Button
-            onClick={sendOTP}
-            disabled={
-              loading ||
-              mobile.length !== 10
-            }
-            className="
-              mt-5
-              h-14
-              w-full
-              rounded-xl
-              bg-gradient-to-r
-              from-[#7C3AED]
-              to-[#5B21B6]
-              text-base
-              font-semibold
-              text-white
-              shadow-[0_10px_25px_rgba(109,40,217,0.18)]
-              transition
-              hover:from-[#6D28D9]
-              hover:to-[#4C1D95]
-              disabled:opacity-50
-            "
-          >
-
-            {loading ? (
-              "Sending..."
-            ) : (
-              <>
-                <Smartphone className="mr-2 h-5 w-5" />
-                Send OTP
-              </>
-            )}
-
-          </Button>
+    {/* BACK TO OTP */}
+    <button
+      type="button"
+      onClick={() => setLoginMode("otp")}
+      className="mt-4 w-full py-2 text-sm font-semibold text-[#6D28D9] hover:text-[#5B21B6]"
+    >
+      ← Back to OTP Login
+    </button>
+  </>
+)}
 
 
           {/* =================================

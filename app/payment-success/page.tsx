@@ -1,12 +1,11 @@
 "use client";
 
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
   const searchParams = useSearchParams();
-
   const orderId = searchParams.get("order_id");
 
   const [checking, setChecking] = useState(true);
@@ -29,15 +28,11 @@ export default function PaymentSuccessPage() {
       }
 
       const parsedCheckoutData = JSON.parse(checkoutData);
-
       const source = parsedCheckoutData?.source;
 
-      // ==========================================
       // BUY NOW
-      // ==========================================
       if (source === "buyNow") {
-        const postId =
-          parsedCheckoutData?.products?.[0]?.postId;
+        const postId = parsedCheckoutData?.products?.[0]?.postId;
 
         if (!postId) {
           console.error("Post ID not found in checkoutData");
@@ -51,34 +46,25 @@ export default function PaymentSuccessPage() {
 
         if (isMobile) {
           window.location.href =
-            `/products/details?postId=${postId}`;
+            `/products/details?postId=${encodeURIComponent(postId)}`;
         } else {
           window.location.href =
-            `/products/desktop/details?postId=${postId}`;
+            `/products/desktop/details?postId=${encodeURIComponent(postId)}`;
         }
 
         return;
       }
 
-      // ==========================================
       // CART PAYMENT
-      // ==========================================
       if (source === "cart") {
         window.location.href = "/cart";
         return;
       }
 
-      // ==========================================
       // DEFAULT
-      // ==========================================
       window.location.href = "/cart";
-
     } catch (error) {
-      console.error(
-        "Payment success redirect error:",
-        error
-      );
-
+      console.error("Payment success redirect error:", error);
       window.location.href = "/cart";
     }
   };
@@ -103,12 +89,8 @@ export default function PaymentSuccessPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#FAF9FF] px-4">
       <div className="w-full max-w-md rounded-2xl border border-[#E3DDF3] bg-white p-8 text-center shadow-sm">
-
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
-          <CheckCircle
-            size={38}
-            className="text-green-500"
-          />
+          <CheckCircle size={38} className="text-green-500" />
         </div>
 
         <h1 className="mt-5 text-2xl font-bold text-[#32106A]">
@@ -128,24 +110,28 @@ export default function PaymentSuccessPage() {
         <button
           type="button"
           onClick={handleContinue}
-          className="
-            mt-6
-            w-full
-            rounded-lg
-            bg-gradient-to-r
-            from-[#7135E8]
-            to-[#6D28D9]
-            px-5
-            py-3
-            text-sm
-            font-bold
-            text-white
-          "
+          className="mt-6 w-full rounded-lg bg-gradient-to-r from-[#7135E8] to-[#6D28D9] px-5 py-3 text-sm font-bold text-white"
         >
           Continue
         </button>
-
       </div>
     </main>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2
+            size={35}
+            className="animate-spin text-[#7135E8]"
+          />
+        </div>
+      }
+    >
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }

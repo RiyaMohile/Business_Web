@@ -82,6 +82,15 @@ export default function DesktopDashboard() {
               Terms of Use
             </Link>
 
+             <span className="text-slate-300">|</span>
+
+  <Link
+    href="/return-refund-policy"
+    className="text-[#6D28D9] hover:opacity-70"
+  >
+    Return, Refund & Exchange
+  </Link>
+
           </div>
 
         </header>
@@ -146,30 +155,15 @@ export default function DesktopDashboard() {
 
               {/* SAME SIZE FOR LOGIN + REGISTER */}
 
-              <div
-                className="
-                  h-[460px]
-                  w-full
-                  max-w-[570px]
-                  rounded-[20px]
-                  border
-                  border-[#DDD5F8]
-                  bg-white
-                  px-8
-                  py-7
-                  shadow-[0_15px_45px_rgba(91,33,182,0.06)]
-                "
-              >
-
-                {isOtpPage ? (
-  <Otp />
-) : isRegisterPage ? (
-  <Register />
-) : (
-  <Login />
-)}
-
-              </div>
+              <div className="w-full max-w-[570px]">
+  {isOtpPage ? (
+    <Otp />
+  ) : isRegisterPage ? (
+    <Register />
+  ) : (
+    <Login />
+  )}
+</div>
 
             </section>
 

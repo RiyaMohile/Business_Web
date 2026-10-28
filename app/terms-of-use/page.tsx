@@ -37,7 +37,7 @@ export default function TermsOfUse() {
   const fetchPage = async () => {
     try {
       const { data } = await axios.get(
-        "https://api.thover.in/v1/api/about/page/terms-of-use"
+        "http://localhost:5000/v1/api/about/page/terms-of-use"
       );
 
       setPage(data.data);

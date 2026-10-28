@@ -8,7 +8,7 @@ export const sendLoginOTP = async (
   mobile: string
 ) => {
   const { data } = await api.post(
-    "/auth/phone/send-otp",
+    "http://localhost:5000/v2/api/auth/phone/send-otp",
     {
       mobile,
       type: "login",
@@ -27,7 +27,7 @@ export const sendRegisterOTP = async (
   mobile: string
 ) => {
   const { data } = await api.post(
-    "/auth/phone/send-otp",
+    "http://localhost:5000/v2/api/auth/phone/send-otp",
     {
       mobile,
       type: "register",
@@ -115,7 +115,7 @@ export const logoutUser = async () => {
   }
 
   const { data } = await api.post(
-    "https://api.thover.in/v2/api/auth/phone/logout-user",
+    "http://localhost:5000/v2/api/auth/phone/logout-user",
     {
       userId,
       deviceId,

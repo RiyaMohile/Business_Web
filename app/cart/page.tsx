@@ -16,6 +16,7 @@ import {
   updateCartPost,
   removePostFromCart,
 } from "../services/cartApi";
+import api from "../services/api";
 
 interface CartPost {
   postId: any;
@@ -45,6 +46,20 @@ const [selectedStoreId, setSelectedStoreId] =
   const [actionLoading, setActionLoading] =
     useState<string | null>(null);
 
+    const [deliveryError, setDeliveryError] = useState<{
+  title: string;
+  message: string;
+} | null>(null);
+
+    const getStoreKey = (store: any): string => {
+    if (!store) return "";
+
+    if (typeof store === "object") {
+      return String(store.storeId ?? store._id ?? "");
+    }
+
+    return String(store);
+  };
   // ==========================================
   // FETCH CART
   // ==========================================
@@ -116,16 +131,14 @@ const [selectedStoreId, setSelectedStoreId] =
     setCarts(validCarts);
 
     // Select first store initially
-    if (validCarts.length > 0) {
-      setSelectedStoreId(
-        String(
-          validCarts[0].storeId?._id ||
-          validCarts[0].storeId
-        )
-      );
-    } else {
-      setSelectedStoreId(null);
-    }
+    // Select first available store
+if (validCarts.length > 0) {
+  setSelectedStoreId(
+    getStoreKey(validCarts[0].storeId)
+  );
+} else {
+  setSelectedStoreId(null);
+}
 
   } catch (error: any) {
     console.error(
@@ -155,10 +168,7 @@ const [selectedStoreId, setSelectedStoreId] =
 
 const selectedCart = carts.find(
   (cart) =>
-    String(
-      cart.storeId?._id ||
-        cart.storeId
-    ) === selectedStoreId
+    getStoreKey(cart.storeId) === selectedStoreId
 );
 
 // Only selected store ke items
@@ -241,85 +251,68 @@ const handleQuantityChange = async (
   }
 };
 
+
+
   // ==========================================
   // REMOVE
   // ==========================================
 
-  const handleRemove = async (postId: string) => {
+ 
+const handleRemove = async (postId: string) => {
   if (!selectedCart) return;
+
+  const cartId = selectedCart._id;
+  const selectedStoreKey = getStoreKey(selectedCart.storeId);
 
   try {
     setActionLoading(postId);
 
     const response = await removePostFromCart({
-      cartId: selectedCart._id,
+      cartId,
       postId,
     });
 
-    if (response?.success) {
-      setCarts((prev) => {
-        return prev
-          .map((cart) => {
-            if (cart._id !== selectedCart._id) {
-              return cart;
-            }
-
-            // Existing populated product data ko preserve karo
-            const updatedPosts = cart.posts.filter((cartItem) => {
-              const currentPostId =
-                cartItem.postId?._id ||
-                cartItem.postId;
-
-              return (
-                String(currentPostId) !== String(postId)
-              );
-            });
-
-            return {
-              ...cart,
-
-              // Sirf selected product remove hoga
-              posts: updatedPosts,
-
-              // Backend se updated subtotal
-              subtotal:
-                response.cart?.subtotal ??
-                cart.subtotal,
-            };
-          })
-          // Agar selected store ka cart empty ho gaya
-          // to store ko store list se hata do
-          .filter((cart) => cart.posts.length > 0);
-      });
-
-      // Agar selected store empty ho gaya hai
-      // to next available store select karo
-      setCarts((currentCarts) => {
-        if (currentCarts.length === 0) {
-          setSelectedStoreId(null);
-        } else {
-          const currentStoreStillExists =
-            currentCarts.some(
-              (cart) =>
-                String(
-                  cart.storeId?._id ||
-                    cart.storeId
-                ) === selectedStoreId
-            );
-
-          if (!currentStoreStillExists) {
-            setSelectedStoreId(
-              String(
-                currentCarts[0].storeId?._id ||
-                  currentCarts[0].storeId
-              )
-            );
-          }
-        }
-
-        return currentCarts;
-      });
+    if (!response?.success) {
+      console.error("Product remove failed:", response);
+      return;
     }
+
+    setCarts((previousCarts) => {
+      const updatedCarts = previousCarts
+        .map((cart) => {
+          if (cart._id !== cartId) return cart;
+
+          const updatedPosts = cart.posts.filter((item) => {
+            const currentPostId =
+              item.postId?._id ?? item.postId;
+
+            return String(currentPostId) !== String(postId);
+          });
+
+          return {
+            ...cart,
+            posts: updatedPosts,
+            subtotal:
+              response.cart?.subtotal ??
+              (updatedPosts.length === 0 ? 0 : cart.subtotal),
+          };
+        })
+        .filter((cart) => cart.posts.length > 0);
+
+      const selectedStoreExists = updatedCarts.some(
+        (cart) => getStoreKey(cart.storeId) === selectedStoreKey
+      );
+
+      if (!selectedStoreExists) {
+        setSelectedStoreId(
+          updatedCarts.length > 0
+            ? getStoreKey(updatedCarts[0].storeId)
+            : null
+        );
+      }
+
+      return updatedCarts;
+    });
   } catch (error) {
     console.error("REMOVE CART ERROR:", error);
   } finally {
@@ -327,89 +320,176 @@ const handleQuantityChange = async (
   }
 };
 
-const handleBuyAll = () => {
+
+
+const handleBuyAll = async () => {
   if (!selectedCart) {
     alert("Please select a store.");
     return;
   }
 
-  if (!selectedCart.posts || selectedCart.posts.length === 0) {
+  if (
+    !selectedCart.posts ||
+    selectedCart.posts.length === 0
+  ) {
     alert("No products available in this store cart.");
     return;
   }
 
+  // Custom store ID: existing checkout ke liye
   const storeId = String(
-    selectedCart.storeId?._id ||
-    selectedCart.storeId
+    selectedCart.storeId?.storeId ||
+      selectedCart.storeId
   );
 
-  const checkoutProducts = selectedCart.posts.map((item) => {
-    const post =
-      typeof item.postId === "object"
-        ? item.postId
-        : null;
+  // MongoDB _id: backend validation ke liye
+  const mongoStoreId = String(
+    selectedCart.storeId?._id ||
+      selectedCart.storeId
+  );
 
-    const postId =
-      post?._id ||
-      item.postId;
+  const customerAddressId =
+    localStorage.getItem("customerAddressId");
 
-    return {
-      postId: String(postId),
-
-      topic:
-        post?.topic ||
-        post?.title ||
-        "Product",
-
-      image:
-        post?.media?.[0]?.mediaUrl ||
-        post?.image ||
-        post?.imageUrl ||
-        "",
-
-      quantity: Number(item.quantity || 1),
-
-      size: item.size || "",
-
-      price: Number(
-        post?.price?.amount || 0
-      ),
-
-      storeId,
-    };
-  });
-
-  if (checkoutProducts.length === 0) {
-    alert("No products available in cart.");
+  if (!customerAddressId) {
+    alert("Please select a delivery address first.");
     return;
   }
 
-  const checkoutData = {
-    // IMPORTANT: selected store ka Mongo Cart _id
-    cartId: selectedCart._id,
+  try {
+    setActionLoading("checkout");
 
-    // Sirf selected store ke products
-    products: checkoutProducts,
+    // 1. Validate store online status and 20 km distance
+  
+const token = localStorage.getItem("token");
 
-    address: null,
+if (!token) {
+  alert("Your session has expired. Please login again.");
+  router.push("/login");
+  return;
+}
 
-    deliveryCharge: 150,
+const response = await api.post(
+  "http://localhost:5000/v1/api/store/validate-store-delivery",
+  {
+    storeId: mongoStoreId,
+    customerAddressId,
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  }
+);
 
-    storeId,
-  };
 
-  localStorage.setItem(
-    "checkoutData",
-    JSON.stringify(checkoutData)
+    if (!response.data?.success) {
+      alert(
+        response.data?.message ||
+          "Delivery is not available."
+      );
+      return;
+    }
+
+    // 2. Validation successful: prepare checkout products
+    const checkoutProducts = selectedCart.posts.map(
+      (item) => {
+        const post =
+          typeof item.postId === "object"
+            ? item.postId
+            : null;
+
+        const postId = post?._id || item.postId;
+
+        return {
+          postId: String(postId),
+
+          topic:
+            post?.topic ||
+            post?.title ||
+            "Product",
+
+          image:
+            post?.media?.[0]?.mediaUrl ||
+            post?.image ||
+            post?.imageUrl ||
+            "",
+
+          quantity: Number(item.quantity || 1),
+
+          size: item.size || "",
+
+          price: Number(post?.price?.amount || 0),
+
+          storeId,
+        };
+      }
+    );
+
+    if (checkoutProducts.length === 0) {
+      alert("No products available in cart.");
+      return;
+    }
+
+    // 3. Prepare checkout data
+    const checkoutData = {
+      cartId: selectedCart._id,
+      products: checkoutProducts,
+      address: null,
+      deliveryCharge: 150,
+      storeId,
+    };
+
+    localStorage.setItem(
+      "checkoutData",
+      JSON.stringify(checkoutData)
+    );
+
+    console.log(
+      "STORE CHECKOUT DATA:",
+      checkoutData
+    );
+
+    // 4. Go to checkout only after validation succeeds
+    router.push("/checkout");
+  
+} catch (error: any) {
+  console.error(
+    "STORE DELIVERY VALIDATION ERROR:",
+    error?.response?.data || error
   );
 
-  console.log(
-    "STORE CHECKOUT DATA:",
-    checkoutData
-  );
+  const errorData = error?.response?.data;
+  const errorCode = errorData?.code;
 
-  router.push("/checkout");
+  if (errorCode === "STORE_OFFLINE") {
+    setDeliveryError({
+      title: "Store Currently Offline",
+      message:
+        errorData?.message ||
+        "This store is currently offline. Please try another store.",
+    });
+  } else if (errorCode === "OUT_OF_DELIVERY_RANGE") {
+    setDeliveryError({
+      title: "Delivery Not Available",
+      message:
+        errorData?.message ||
+        "This store is outside your 20 km delivery range. Please select another store.",
+    });
+  } else {
+    setDeliveryError({
+      title: "Unable to Continue",
+      message:
+        errorData?.message ||
+        "Unable to verify store delivery. Please try again.",
+    });
+  }
+} finally {
+  setActionLoading(null);
+}
+
 };
+
 
   // ==========================================
   // LOADING
@@ -533,84 +613,76 @@ return (
 
       {/* ================= SELECT STORE ================= */}
 
-<div className="mb-6 sm:mb-7">
-
-  <div className="mb-3 flex items-center gap-2">
-    <ShoppingBag
-      size={22}
-      strokeWidth={2}
-      className="text-[#32106A] sm:h-6 sm:w-6"
-    />
-
-    <h2 className="text-[18px] font-bold text-[#32106A] sm:text-[20px]">
-      Select Store
-    </h2>
-  </div>
-
-  <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
-    {carts.map((cart) => {
-      const storeId = String(
-        cart.storeId?._id ||
-          cart.storeId
-      );
-
-      const storeName =
-        cart.storeId?.storeName ||
-        "Store";
-
-      const isSelected =
-        selectedStoreId === storeId;
-
-      return (
-        <button
-          key={storeId}
-          type="button"
-          onClick={() =>
-            setSelectedStoreId(storeId)
-          }
-          className={`
-  flex
-  min-w-[168px]
-  max-w-[190px]
-  items-center
-  justify-between
-  gap-2
-  rounded-lg
-  px-3
-  py-2.5
-  transition
-  sm:min-w-[180px]
-  sm:px-4
-  sm:py-3
-  ${
-    isSelected
-      ? "bg-gradient-to-r from-[#7135E8] to-[#6D28D9] text-white shadow-sm"
-      : "border border-[#DED7F5] bg-white text-[#32106A]"
-  }
-`}
-        >
-          <div className="flex min-w-0 items-center gap-2.5">
-            <ShoppingBag
-              size={22}
-              strokeWidth={2}
-              className="shrink-0 sm:h-6 sm:w-6"
-            />
-
-            <span className="truncate text-[12px] font-semibold sm:text-[14px]">
-  {storeName}
-</span>
-          </div>
-
-          {isSelected && (
-            <span className="shrink-0 text-lg sm:text-xl">
-              →
-            </span>
-          )}
-        </button>
-      );
-    })}
-  </div>
+<div className="mb-3 flex items-center gap-2">
+  <ShoppingBag
+    size={24}
+    strokeWidth={2}
+    className="text-[#32106A]"
+  />
+  <h2 className="text-xl font-bold text-[#32106A]">
+    Select Store
+  </h2>
 </div>
+
+
+<div className="flex gap-3 overflow-x-auto overflow-y-hidden pb-2 scrollbar-hide snap-x snap-mandatory sm:grid sm:grid-cols-2 sm:overflow-visible">
+
+  {carts.map((cart) => {
+    const storeId = getStoreKey(cart.storeId);
+    const storeName = cart.storeId?.storeName || "Store";
+    const isOnline = cart.storeId?.isOnline === true;
+    const isSelected = selectedStoreId === storeId;
+
+    return (
+      <button
+        key={storeId}
+        type="button"
+        onClick={() => setSelectedStoreId(storeId)}
+        className={`flex h-[50px] w-[190px] min-w-[190px] shrink-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all sm:w-full sm:min-w-0 sm:max-w-none ${
+ isSelected
+              ? "border-[#7135E8] bg-[#F0E9FF] shadow-[0_4px_14px_rgba(109,40,217,0.18)]"
+              : "border-[#E5DDFB] bg-white hover:border-[#B9A0FF]"
+}`}
+      >
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#E9DEFF] sm:h-12 sm:w-12">
+          <ShoppingBag
+            size={20}
+            strokeWidth={2}
+            className="text-[#32106A]"
+          />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="w-full truncate text-[11px] font-bold leading-tight text-[#251052] sm:text-base sm:leading-normal">
+            {storeName}
+          </p>
+
+          <span
+            className={`mt-1 inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] leading-tight font-medium sm:mt-2 sm:gap-2 sm:px-3 sm:py-1 sm:text-sm ${
+  isOnline
+    ? "bg-[#DDF8EE] text-[#008F5B]"
+    : "bg-[#FFE1E5] text-[#D71932]"
+}`}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${
+                isOnline ? "bg-[#00C781]" : "bg-[#FF2438]"
+              }`}
+            />
+            {isOnline ? "Online" : "Offline"}
+          </span>
+        </div>
+
+        {isSelected && (
+          <span className="shrink-0 text-2xl font-semibold text-[#7135E8]">
+            →
+          </span>
+        )}
+      </button>
+    );
+  })}
+</div>
+
 
       {/* ================= CART TITLE ================= */}
 
@@ -925,6 +997,7 @@ return (
         <button
   type="button"
   onClick={handleBuyAll}
+  disabled={actionLoading === "checkout"}
   className="
     flex
     min-w-[175px]
@@ -949,7 +1022,7 @@ return (
     sm:text-[16px]
   "
 >
-  Buy All
+  {actionLoading === "checkout" ? "Checking..." : "Buy All"}
 
   <span className="text-[20px]">
     →
@@ -958,6 +1031,66 @@ return (
       </div>
 
     </div>
-  </main>
+
+
+    
+  
+{deliveryError && (
+  <div
+    className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1B1033]/60 px-4 py-6 backdrop-blur-sm"
+    onClick={() => setDeliveryError(null)}
+  >
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="delivery-error-title"
+      className="w-full max-w-[390px] overflow-hidden rounded-3xl bg-white shadow-2xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Top section */}
+      <div className="flex flex-col items-center px-6 pb-5 pt-8 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#F3E8FF]">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            className="h-8 w-8 text-[#7135E8]"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path
+              d="M12 8v4m0 4h.01"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
+
+        <h2
+          id="delivery-error-title"
+          className="mt-5 text-xl font-bold text-[#32106A]"
+        >
+          {deliveryError.title}
+        </h2>
+
+        <p className="mt-3 text-sm leading-6 text-[#71669A]">
+          {deliveryError.message}
+        </p>
+      </div>
+
+      {/* Button section */}
+      <div className="px-6 pb-6">
+        <button
+          type="button"
+          onClick={() => setDeliveryError(null)}
+          className="w-full rounded-xl bg-gradient-to-r from-[#7135E8] to-[#6D28D9] px-5 py-3.5 text-sm font-semibold text-white shadow-md transition hover:from-[#6428D8] hover:to-[#5B21B6] active:scale-[0.98]"
+        >
+          Okay, Got It
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+</main>
+
 );
 }

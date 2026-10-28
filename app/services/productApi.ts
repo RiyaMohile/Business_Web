@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const BASE_URL =
-  "https://api.thover.in/v1/api";
+  "http://localhost:5000/v1/api";
 
 // ==========================================
 // TYPES
@@ -144,47 +144,71 @@ export const getTrendingProducts = async (
 // SEARCH PRODUCTS
 // ==========================================
 
+
+
 export const searchProducts = async (
   search: string,
+  customerAddressId: string,
   category?: string,
   idealFor?: string,
   limit = 20
 ): Promise<SearchResponse> => {
-  const token =
-    localStorage.getItem("token");
+  const token = localStorage.getItem("token");
 
   if (!token) {
-    throw new Error(
-      "Authentication token not found."
-    );
+    throw new Error("Authentication token not found.");
   }
 
-  const { data } = await axios.get(
-    `https://api.thover.in/v1/api/post/search-topic`,
-    {
-      params: {
-        search,
-        category,
-        idealFor,
-        limit,
-      },
+  const searchTerm = search.trim();
 
-      headers: {
-        Authorization:
-          `Bearer ${token}`,
-      },
+  if (!searchTerm) {
+    throw new Error("Please enter a search term.");
+  }
+
+  if (!customerAddressId?.trim()) {
+    throw new Error("Please select a delivery address.");
+  }
+
+  try {
+    const { data } = await axios.get<SearchResponse>(
+      `${BASE_URL}/post/search-topic`,
+      {
+        params: {
+          search: searchTerm,
+          customerAddressId,
+          category,
+          idealFor,
+          limit,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!data?.success) {
+      throw new Error(data?.message || "Search failed.");
     }
-  );
 
-  if (!data?.success) {
+    return data;
+  } catch (error: any) {
+    console.error("SEARCH API ERROR:", {
+      status: error?.response?.status,
+      response: error?.response?.data,
+      searchTerm,
+      customerAddressId,
+    });
+
     throw new Error(
-      data?.message ||
+      error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
         "Search failed."
     );
   }
-
-  return data;
 };
+
+
 
 import api from "./api";
 
@@ -354,6 +378,7 @@ export const getProductById = async (
   return data;
 };
 
+
 export const getNewArrivalProducts = async (
   customerAddressId: string,
   page = 1,
@@ -365,8 +390,21 @@ export const getNewArrivalProducts = async (
     throw new Error("Authentication token not found.");
   }
 
-  const { data } = await axios.get(
-    `${BASE_URL}/post/new-arrivals`,
+  if (!customerAddressId?.trim()) {
+    throw new Error("Please select a delivery address.");
+  }
+
+  const url = `${BASE_URL}/post/new-arrivals`;
+
+  console.log("NEW ARRIVALS REQUEST:", {
+    url,
+    customerAddressId,
+    page,
+    limit,
+  });
+
+  const { data } = await axios.get<NewArrivalResponse>(
+    url,
     {
       params: {
         customerAddressId,
@@ -379,10 +417,20 @@ export const getNewArrivalProducts = async (
     }
   );
 
+  console.log("NEW ARRIVALS RESPONSE:", data);
+
   if (!data?.success) {
     throw new Error(
-      data?.message || "Unable to load new arrival products."
+      "Unable to load new arrival products."
     );
+  }
+
+  // Ensure the response corresponds to the requested address.
+  if (data.customerAddressId !== customerAddressId) {
+    console.error("Address ID mismatch:", {
+      requested: customerAddressId,
+      received: data.customerAddressId,
+    });
   }
 
   return data;

@@ -28,6 +28,7 @@ import {
   getProductById,
   ProductDetail,
 } from "../../services/productApi";
+import api from "../../services/api";
 import {
   addReview,
   getReviewsByPostId,
@@ -83,6 +84,12 @@ const [addingToCart, setAddingToCart] =
   const [showReviewModal, setShowReviewModal] =
     useState(false);
     const [showComingSoon, setShowComingSoon] = useState(false);
+    const [buyNowLoading, setBuyNowLoading] = useState(false);
+
+const [deliveryError, setDeliveryError] = useState<{
+  title: string;
+  message: string;
+} | null>(null);
 
   const [reviewRating, setReviewRating] =
     useState(0);
@@ -606,46 +613,118 @@ finalPrice = Math.max(
   const outOfStock =
     hasInventory && (selectedSize ? selectedStock <= 0 : totalInventory <= 0);
 
- const handleBuyNow = () => {
-  if (!product?._id || outOfStock) return;
+ 
+const handleBuyNow = async () => {
+  if (buyNowLoading || !product?._id || outOfStock) return;
 
-  const storeId =
-    product.store?._id;
+  const token = localStorage.getItem("token");
 
-  if (!storeId) {
-    alert("Store information not found");
+  if (!token) {
+    router.push("/login");
     return;
   }
 
-  const checkoutData = {
-    products: [
+  const customerAddressId =
+    localStorage.getItem("customerAddressId");
+
+  if (!customerAddressId) {
+    setDeliveryError({
+      title: "Delivery Address Required",
+      message:
+        "Please select your delivery address before placing an order.",
+    });
+    return;
+  }
+
+  // MongoDB store _id, used for validation
+  const mongoStoreId = product.store?._id;
+
+  if (!mongoStoreId) {
+    setDeliveryError({
+      title: "Store Not Found",
+      message: "Store information is unavailable. Please try again later.",
+    });
+    return;
+  }
+
+  try {
+    setBuyNowLoading(true);
+
+    // Validate store online status and 20 km delivery range
+    await api.post(
+      "http://localhost:5000/v1/api/store/validate-store-delivery",
       {
-        postId: product._id,
-        topic: product.topic,
-        image:
-          product.media?.[0]?.mediaUrl ||
-          "",
-        quantity: 1,
-        size: selectedSize,
-        price:
-          Number(
-            product.price?.amount || 0
-          ),
+        storeId: String(mongoStoreId),
+        customerAddressId,
       },
-    ],
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
-    address: null,
+    // Prepare checkout data after successful validation
+    const checkoutData = {
+      products: [
+        {
+          postId: String(product._id),
+          topic: product.topic,
+          image: product.media?.[0]?.mediaUrl || "",
+          quantity,
+          size: selectedSize,
+          price: Number(finalPrice),
+          storeId: String(mongoStoreId),
+        },
+      ],
+      address: null,
+      deliveryCharge: 150,
+      storeId: String(mongoStoreId),
+    };
 
-    deliveryCharge: 150,
-  };
+    localStorage.setItem(
+      "checkoutData",
+      JSON.stringify(checkoutData)
+    );
 
-  localStorage.setItem(
-    "checkoutData",
-    JSON.stringify(checkoutData)
-  );
+    router.push("/checkout");
+  } catch (error: any) {
+    console.error(
+      "BUY NOW DELIVERY VALIDATION ERROR:",
+      error?.response?.data || error
+    );
 
-  router.push("/checkout");
+    const errorData = error?.response?.data;
+
+    if (errorData?.code === "STORE_OFFLINE") {
+      setDeliveryError({
+        title: "Store Currently Offline",
+        message:
+          errorData.message ||
+          "This store is currently offline. Please try another store.",
+      });
+    } else if (
+      errorData?.code === "OUT_OF_DELIVERY_RANGE"
+    ) {
+      setDeliveryError({
+        title: "Delivery Not Available",
+        message:
+          errorData.message ||
+          "This store is outside your 20 km delivery range.",
+      });
+    } else {
+      setDeliveryError({
+        title: "Unable to Continue",
+        message:
+          errorData?.message ||
+          "Unable to verify store delivery. Please try again.",
+      });
+    }
+  } finally {
+    setBuyNowLoading(false);
+  }
 };
+
 
   // ==========================================
   // ADD TO CART
@@ -657,7 +736,22 @@ finalPrice = Math.max(
   try {
     if (!product?._id) return;
 
-    const storeId = product.store?._id;
+   const storeId =
+  typeof product.store === "string"
+    ? product.store
+    : product.store?._id;
+
+console.log("PRODUCT STORE:", product.store);
+console.log("EXTRACTED STORE ID:", storeId);
+
+if (!storeId) {
+  console.error("Full product response:", product);
+
+  alert(
+    "Store information is missing from the product API response."
+  );
+  return;
+}
 
     if (!storeId) {
       alert("Store information not found");
@@ -1751,29 +1845,20 @@ finalPrice = Math.max(
 </button>
 
           <button
-            type="button"
-            onClick={handleBuyNow}
-            disabled={outOfStock}
-            className="
-              disabled:cursor-not-allowed
-              disabled:opacity-50
-              h-12
-              flex-1
-              rounded-xl
-              bg-gradient-to-r
-              from-[#7C3AED]
-              to-[#5B21B6]
-              text-sm
-              font-semibold
-              text-white
-              shadow-md
-              transition
-              hover:from-[#6D28D9]
-              hover:to-[#4C1D95]
-            "
-          >
-            Buy Now
-          </button>
+  type="button"
+  onClick={handleBuyNow}
+  disabled={buyNowLoading || outOfStock}
+  className="h-12 flex-1 rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#5B21B6] text-sm font-semibold text-white shadow-md transition hover:from-[#6D28D9] hover:to-[#4C1D95] disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {buyNowLoading ? (
+    <>
+      <Loader2 className="mr-1 inline-block h-4 w-4 animate-spin" />
+      Checking...
+    </>
+  ) : (
+    "Buy Now"
+  )}
+</button>
 
         </div>
 
@@ -2011,96 +2096,45 @@ finalPrice = Math.max(
     COMING SOON MODAL
 ===================================== */}
 
-{showComingSoon && (
+
+{deliveryError && (
   <div
-    className="
-      fixed
-      inset-0
-      z-[200]
-      flex
-      items-center
-      justify-center
-      bg-black/40
-      px-4
-    "
-    onClick={() => setShowComingSoon(false)}
+    className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm"
+    onClick={() => setDeliveryError(null)}
   >
     <div
-      className="
-        w-full
-        max-w-[380px]
-        rounded-2xl
-        bg-white
-        p-6
-        text-center
-        shadow-2xl
-      "
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="delivery-error-title"
+      className="w-full max-w-[380px] rounded-2xl bg-white p-6 text-center shadow-2xl"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Icon */}
-      <div
-        className="
-          mx-auto
-          flex
-          h-16
-          w-16
-          items-center
-          justify-center
-          rounded-full
-          bg-[#F3E8FF]
-        "
-      >
-        <span className="text-3xl">🚀</span>
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F3E8FF]">
+        <span className="text-3xl">ⓘ</span>
       </div>
 
-      {/* Title */}
       <h2
-        className="
-          mt-4
-          text-xl
-          font-bold
-          text-[#101828]
-        "
+        id="delivery-error-title"
+        className="mt-4 text-xl font-bold text-[#32106A]"
       >
-        Thover Coming Soon
+        {deliveryError.title}
       </h2>
 
-      {/* Description */}
-      <p
-        className="
-          mt-2
-          text-sm
-          leading-6
-          text-[#7182A6]
-        "
-      >
-        We are working hard to bring Thover to you.
-        Stay tuned!
+      <p className="mt-2 text-sm leading-6 text-[#71669A]">
+        {deliveryError.message}
       </p>
 
-      {/* Button */}
       <button
         type="button"
-        onClick={() => setShowComingSoon(false)}
-        className="
-          mt-6
-          h-11
-          w-full
-          rounded-xl
-          bg-gradient-to-r
-          from-[#7C3AED]
-          to-[#5B21B6]
-          text-sm
-          font-semibold
-          text-white
-          shadow-md
-        "
+        onClick={() => setDeliveryError(null)}
+        className="mt-6 h-11 w-full rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#5B21B6] text-sm font-semibold text-white shadow-md"
       >
-        Okay
+        Okay, Got It
       </button>
     </div>
   </div>
 )}
+
 
     </main>
   );

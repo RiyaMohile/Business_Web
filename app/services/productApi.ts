@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const BASE_URL =
-  "http://localhost:5000/v1/api";
+  "https://api.thover.in/v1/api";
 
 // ==========================================
 // TYPES

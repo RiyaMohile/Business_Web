@@ -421,7 +421,7 @@ const fetchAddresses = async () => {
     }
 
     const response = await axios.get(
-      "http://localhost:5000/v1/api/address/",
+      "https://api.thover.in/v1/api/address/",
       {
         headers: {
           Authorization: `Bearer ${token}`,

@@ -156,7 +156,7 @@ const fetchCityFromCoordinates = async (
       // ----------------------------------------------
 
       const response = await fetch(
-        "http://localhost:5000/v1/api/address/",
+        "https://api.thover.in/v1/api/address/",
         {
           method: "GET",
           headers: {

@@ -87,7 +87,7 @@ const fetchPosts = useCallback(async () => {
     setSuccess("");
 
     const url = new URL(
-      "http://localhost:5000/v2/api/post/all-posts"
+      "https://api.thover.in/v2/api/post/all-posts"
     );
 
     if (city.trim()) {
@@ -263,7 +263,7 @@ const handleUpload = async (postId: string) => {
     }
 
     const response = await fetch(
-      `http://localhost:5000/v2/api/post/posts/${encodeURIComponent(postId)}/media/${encodeURIComponent(media._id)}/download`,
+      `https://api.thover.in/v2/api/post/posts/${encodeURIComponent(postId)}/media/${encodeURIComponent(media._id)}/download`,
       {
         method: "GET",
         headers: {

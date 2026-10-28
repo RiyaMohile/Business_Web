@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const BASE_URL = "http://localhost:5000/v2/api";
+const BASE_URL = "https://api.thover.in/v2/api";
 
 export const getStoreDetailsWithProducts = async (
   storeId: string
@@ -87,7 +87,7 @@ export const searchStoreByStoreId = async (
   storeId: string
 ) => {
   const response = await axios.get(
-    "http://localhost:5000/v2/api/store/search-by-store-id",
+    "https://api.thover.in/v2/api/store/search-by-store-id",
     {
       params: { storeId },
     }

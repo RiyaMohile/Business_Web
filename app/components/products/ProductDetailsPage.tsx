@@ -652,7 +652,7 @@ const handleBuyNow = async () => {
 
     // Validate store online status and 20 km delivery range
     await api.post(
-      "http://localhost:5000/v1/api/store/validate-store-delivery",
+      "https://api.thover.in/v1/api/store/validate-store-delivery",
       {
         storeId: String(mongoStoreId),
         customerAddressId,

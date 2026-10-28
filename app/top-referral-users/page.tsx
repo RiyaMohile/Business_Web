@@ -18,7 +18,7 @@ interface ReferralApiResponse {
   topReferrers: ReferralUser[];
 }
 
-const API_URL = "http://localhost:5000/v1/api/user";
+const API_URL = "https://api.thover.in/v1/api/user";
 
 const rankStyles: Record<
   number,

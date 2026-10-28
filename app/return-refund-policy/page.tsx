@@ -29,7 +29,7 @@ interface PageData {
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000/v1/api";
+  "https://api.thover.in/v1/api";
 
 export default function ReturnRefundPolicy() {
   const [page, setPage] = useState<PageData | null>(null);

@@ -491,7 +491,7 @@ useEffect(() => {
         const token = localStorage.getItem("token");
 
         const response = await fetch(
-          `http://localhost:5000/v1/api/post/post/${firstPostId}`,
+          `https://api.thover.in/v1/api/post/post/${firstPostId}`,
           {
             headers: {
               ...(token
@@ -600,7 +600,7 @@ console.log("PAYMENT RESPONSE:", data);
       }
 
       const response = await fetch(
-        "http://localhost:5000/v1/api/address",
+        "https://api.thover.in/v1/api/address",
         {
           method: "GET",
           headers: {
@@ -792,7 +792,7 @@ console.log("PAYMENT RESPONSE:", data);
       }
 
       const response = await fetch(
-        "http://localhost:5000/v1/api/coupon/my-coupons?status=active",
+        "https://api.thover.in/v1/api/coupon/my-coupons?status=active",
         {
           method: "GET",
           headers: {
@@ -943,7 +943,7 @@ const handlePayment = async () => {
 
     // 2. Create Razorpay order on backend.
     const response = await fetch(
-      "http://localhost:5000/v2/api/payments/create",
+      "https://api.thover.in/v2/api/payments/create",
       {
         method: "POST",
         headers: {
@@ -1013,7 +1013,7 @@ const handlePayment = async () => {
 
   try {
     const verifyUrl =
-      "http://localhost:5000/v2/api/payments/verify";
+      "https://api.thover.in/v2/api/payments/verify";
 
     console.log("CALLING VERIFY API:", verifyUrl);
 

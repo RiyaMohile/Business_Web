@@ -2,7 +2,7 @@
 
 import axios from "axios";
 
-const BASE_URL = "http://localhost:5000/v1/api/vibe";
+const BASE_URL = "https://api.thover.in/v1/api/vibe";
 
 export interface ReviewUser {
   _id?: string;

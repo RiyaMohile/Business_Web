@@ -37,7 +37,7 @@ export default function PrivacyPolicy() {
   const fetchPage = async () => {
     try {
       const { data } = await axios.get(
-        "http://localhost:5000/v1/api/about/page/privacy-policy"
+        "https://api.thover.in/v1/api/about/page/privacy-policy"
       );
 
       setPage(data.data);

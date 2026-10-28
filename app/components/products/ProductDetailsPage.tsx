@@ -595,8 +595,19 @@ finalPrice = Math.max(
   // BUY NOW
   // ==========================================
 
+  const hasInventory =
+    Array.isArray(product?.inventory) && product.inventory.length > 0;
+  const selectedStock = Number(
+    product?.inventory?.find((i) => i.size === selectedSize)?.stock ?? 0
+  );
+  const totalInventory =
+    product?.inventory?.reduce((sum, i) => sum + Number(i.stock || 0), 0) ?? 0;
+  // Out of stock when the chosen size has none, or nothing is left at all.
+  const outOfStock =
+    hasInventory && (selectedSize ? selectedStock <= 0 : totalInventory <= 0);
+
  const handleBuyNow = () => {
-  if (!product?._id) return;
+  if (!product?._id || outOfStock) return;
 
   const storeId =
     product.store?._id;
@@ -641,7 +652,7 @@ finalPrice = Math.max(
   // ==========================================
 
   const handleAddToCart = async () => {
-  if (addingToCart) return;
+  if (addingToCart || outOfStock) return;
 
   try {
     if (!product?._id) return;
@@ -972,10 +983,17 @@ finalPrice = Math.max(
         {/* STOCK + IDEAL FOR */}
 
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          <div className="inline-flex items-center gap-2 rounded-full bg-[#EFFAF3] px-3 py-1.5 text-xs font-semibold text-[#20A35A]">
-            <span className="h-2 w-2 rounded-full bg-[#20A35A]" />
-            In Stock
-          </div>
+          {outOfStock ? (
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#FEF3F2] px-3 py-1.5 text-xs font-semibold text-[#D92D20]">
+              <span className="h-2 w-2 rounded-full bg-[#D92D20]" />
+              Out of Stock
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#EFFAF3] px-3 py-1.5 text-xs font-semibold text-[#20A35A]">
+              <span className="h-2 w-2 rounded-full bg-[#20A35A]" />
+              In Stock
+            </div>
+          )}
 
           {product.idealFor && (
             <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-[#475467]">
@@ -1706,7 +1724,7 @@ finalPrice = Math.max(
           <button
   type="button"
   onClick={handleAddToCart}
-  disabled={addingToCart}
+  disabled={addingToCart || outOfStock}
   className="
     h-12
     flex-1
@@ -1725,7 +1743,9 @@ finalPrice = Math.max(
 >
   <ShoppingCart className="mr-1 inline-block h-4 w-4" />
 
-  {addingToCart
+  {outOfStock
+    ? "Out of Stock"
+    : addingToCart
     ? "Adding..."
     : "Add to Cart"}
 </button>
@@ -1733,7 +1753,10 @@ finalPrice = Math.max(
           <button
             type="button"
             onClick={handleBuyNow}
+            disabled={outOfStock}
             className="
+              disabled:cursor-not-allowed
+              disabled:opacity-50
               h-12
               flex-1
               rounded-xl

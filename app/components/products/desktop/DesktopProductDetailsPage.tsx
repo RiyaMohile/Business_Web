@@ -474,12 +474,24 @@ const handleSubmitReview = async () => {
   // BUY NOW
   // ====================================================
 
+  const hasInventory =
+    Array.isArray(product?.inventory) && product.inventory.length > 0;
+  const selectedStock = Number(
+    product?.inventory?.find((i) => i.size === selectedSize)?.stock ?? 0
+  );
+  const totalInventory =
+    product?.inventory?.reduce((sum, i) => sum + Number(i.stock || 0), 0) ?? 0;
+  // Out of stock when the chosen size has none, or nothing is left at all.
+  const outOfStock =
+    hasInventory && (selectedSize ? selectedStock <= 0 : totalInventory <= 0);
+
  const handleBuyNow = () => {
+  if (outOfStock) return;
   setComingSoonModal(true);
 };
 
     const handleAddToCart = async () => {
-  if (addingToCart) return;
+  if (addingToCart || outOfStock) return;
 
   try {
     if (!product?._id) return;
@@ -777,10 +789,17 @@ const handleSubmitReview = async () => {
             <div className="mb-3 flex flex-wrap items-center gap-3">
 
   {/* IN STOCK */}
-  <div className="inline-flex items-center gap-2 rounded-full bg-[#EFFAF3] px-3 py-1.5 text-xs font-semibold text-[#20A35A]">
-    <span className="h-2 w-2 rounded-full bg-[#20A35A]" />
-    In Stock
-  </div>
+  {outOfStock ? (
+    <div className="inline-flex items-center gap-2 rounded-full bg-[#FEF3F2] px-3 py-1.5 text-xs font-semibold text-[#D92D20]">
+      <span className="h-2 w-2 rounded-full bg-[#D92D20]" />
+      Out of Stock
+    </div>
+  ) : (
+    <div className="inline-flex items-center gap-2 rounded-full bg-[#EFFAF3] px-3 py-1.5 text-xs font-semibold text-[#20A35A]">
+      <span className="h-2 w-2 rounded-full bg-[#20A35A]" />
+      In Stock
+    </div>
+  )}
 
   {/* IDEAL FOR */}
   {product.idealFor && (
@@ -920,6 +939,12 @@ const handleSubmitReview = async () => {
                     <button
                       key={size}
                       type="button"
+                      disabled={
+                        hasInventory &&
+                        Number(
+                          product?.inventory?.find((i) => i.size === size)?.stock ?? 0
+                        ) <= 0
+                      }
                       onClick={() =>
                         setSelectedSize(
                           size
@@ -933,6 +958,8 @@ const handleSubmitReview = async () => {
                         px-5
                         text-sm
                         font-medium
+                        disabled:cursor-not-allowed
+                        disabled:opacity-40
                         ${
                           selectedSize ===
                           size
@@ -1013,7 +1040,7 @@ const handleSubmitReview = async () => {
   <button
   type="button"
   onClick={handleAddToCart}
-  disabled={addingToCart}
+  disabled={addingToCart || outOfStock}
   className="
     flex-1
     rounded-xl
@@ -1029,13 +1056,14 @@ const handleSubmitReview = async () => {
 >
     <ShoppingCart className="mr-2 inline-block h-5 w-5" />
 
-{addingToCart ? "Adding..." : "Add to Cart"}
+{outOfStock ? "Out of Stock" : addingToCart ? "Adding..." : "Add to Cart"}
   </button>
 
   <button
     type="button"
     onClick={handleBuyNow}
-    className="flex-1 rounded-xl bg-black px-6 py-4 font-semibold text-white"
+    disabled={outOfStock}
+    className="flex-1 rounded-xl bg-black px-6 py-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
   >
     Buy Now
   </button>

@@ -14,6 +14,7 @@ import {
   Camera,
   Phone,
   Heart,
+  Package,
   Store as StoreIcon,
   ChevronDown,
   LogOut,
@@ -1558,6 +1559,48 @@ const handleSelectAddress = (
                       </div>
                     )}
                   </div>
+
+                  {/* ====================================
+                      MY ORDERS
+                  ==================================== */}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      router.push("/orders");
+                    }}
+                    className="
+                      mt-6
+                      flex
+                      w-full
+                      items-center
+                      justify-between
+                      rounded-xl
+                      border
+                      border-slate-100
+                      bg-white
+                      p-3
+                      text-left
+                      transition
+                      hover:bg-[#F8F9FC]
+                    "
+                  >
+                    <div className="flex items-center gap-2">
+                      <Package
+                        size={18}
+                        className="text-[#6D28D9]"
+                      />
+
+                      <h3 className="text-base font-bold text-[#101828]">
+                        My Orders
+                      </h3>
+                    </div>
+
+                    <span className="text-lg text-[#98A2B3]">
+                      ›
+                    </span>
+                  </button>
 
                   {/* ====================================
                       LIKED STORES

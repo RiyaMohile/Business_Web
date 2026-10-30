@@ -610,8 +610,16 @@ finalPrice = Math.max(
   const totalInventory =
     product?.inventory?.reduce((sum, i) => sum + Number(i.stock || 0), 0) ?? 0;
   // Out of stock when the chosen size has none, or nothing is left at all.
+  // The listing uses totalStock, so trust it when the per-size rows disagree.
+  const listedStock = Number(product?.totalStock ?? 0);
   const outOfStock =
-    hasInventory && (selectedSize ? selectedStock <= 0 : totalInventory <= 0);
+    listedStock > 0 && totalInventory <= 0
+      ? false
+      : hasInventory
+        ? selectedSize
+          ? selectedStock <= 0
+          : totalInventory <= 0
+        : product?.totalStock !== undefined && listedStock <= 0;
 
  
 const handleBuyNow = async () => {

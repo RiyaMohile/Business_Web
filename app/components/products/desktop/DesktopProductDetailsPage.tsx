@@ -63,7 +63,7 @@ export default function DesktopProductDetailsPage() {
     useState(0);
 
   const [selectedSize, setSelectedSize] =
-    useState("L");
+    useState("");
 
   const [selectedColor, setSelectedColor] =
     useState("Yellow");
@@ -162,6 +162,14 @@ const [deliveryError, setDeliveryError] = useState<{
         setProduct(
           response.data
         );
+
+        // Pre-select the first size that actually has stock.
+        const availableSize = response.data?.inventory?.find(
+          (item: any) => Number(item.stock) > 0
+        );
+        if (availableSize) {
+          setSelectedSize(availableSize.size);
+        }
 
       } catch (error: any) {
 
@@ -488,8 +496,16 @@ const handleSubmitReview = async () => {
   const totalInventory =
     product?.inventory?.reduce((sum, i) => sum + Number(i.stock || 0), 0) ?? 0;
   // Out of stock when the chosen size has none, or nothing is left at all.
+  // The listing uses totalStock, so trust it when the per-size rows disagree.
+  const listedStock = Number(product?.totalStock ?? 0);
   const outOfStock =
-    hasInventory && (selectedSize ? selectedStock <= 0 : totalInventory <= 0);
+    listedStock > 0 && totalInventory <= 0
+      ? false
+      : hasInventory
+        ? selectedSize
+          ? selectedStock <= 0
+          : totalInventory <= 0
+        : product?.totalStock !== undefined && listedStock <= 0;
 
  
 const handleBuyNow = async () => {

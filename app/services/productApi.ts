@@ -403,19 +403,27 @@ export const getNewArrivalProducts = async (
     limit,
   });
 
-  const { data } = await axios.get<NewArrivalResponse>(
-    url,
-    {
+  let data: NewArrivalResponse;
+
+  try {
+    ({ data } = await axios.get<NewArrivalResponse>(url, {
       params: {
         customerAddressId,
+        addressId: customerAddressId,
         page,
         limit,
       },
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    }
-  );
+    }));
+  } catch (err: any) {
+    throw new Error(
+      err?.response?.data?.message ||
+        err?.message ||
+        "Unable to load new arrival products."
+    );
+  }
 
   console.log("NEW ARRIVALS RESPONSE:", data);
 

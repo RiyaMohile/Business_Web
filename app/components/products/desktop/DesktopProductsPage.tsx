@@ -19,6 +19,7 @@ import {
 
 
 import AddressModal from "../../address/AddressModal";
+import LocationUnavailable from "../LocationUnavailable";
 import Navbar from "../../Navbar";
 
 
@@ -222,7 +223,7 @@ const selectedAddress =
       address._id === savedAddressFromStorage?._id
   ) ||
   addresses.find(
-    (address: any) => address?.isPrimary === true
+    (address: any) => address?.isPrimary === true || address?.isDefault === true
   ) ||
   addresses[0];
 
@@ -340,6 +341,8 @@ setProducts(newArrivalProducts);
         "GET PRODUCTS ERROR:",
         error
       );
+
+      setProducts([]);
 
       setError(
         error?.message ||
@@ -512,6 +515,10 @@ const handleSearch = async (value: string) => {
   // MAIN UI
   // ====================================================
 
+  // No products served at this address: hide the promo hero.
+  const notServiceable =
+    !loading && !error && !search.trim() && products.length === 0;
+
   return (
     <main className="min-h-screen bg-[#FAFBFF]">
 
@@ -543,6 +550,7 @@ const handleSearch = async (value: string) => {
               HERO
           ============================================= */}
 
+          {!notServiceable && (
           <section className="relative h-[145px] overflow-hidden rounded-2xl bg-gradient-to-r from-[#FCFAFF] via-[#FAF7FF] to-[#F8F3FF] px-1 py-1">
 
 
@@ -581,6 +589,7 @@ const handleSearch = async (value: string) => {
 </div>
 
           </section>
+          )}
 
 
           {/* =============================================
@@ -663,30 +672,25 @@ const handleSearch = async (value: string) => {
 
           ) : products.length === 0 ? (
 
-            <div className="mt-8 flex min-h-[300px] items-center justify-center rounded-2xl border border-slate-100 bg-white">
-
-              <div className="text-center">
-
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F4ECFF]">
-
-                  <ShoppingCart
-                    size={28}
-                    className="text-[#6D28D9]"
-                  />
-
+            search.trim() ? (
+              <div className="mt-8 flex min-h-[300px] items-center justify-center rounded-2xl border border-slate-100 bg-white">
+                <div className="text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F4ECFF]">
+                    <ShoppingCart size={28} className="text-[#6D28D9]" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold text-[#101828]">
+                    No products found
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Try searching for another product.
+                  </p>
                 </div>
-
-                <h3 className="mt-4 text-lg font-semibold text-[#101828]">
-                  No products found
-                </h3>
-
-                <p className="mt-1 text-sm text-slate-400">
-                  Try searching for another product.
-                </p>
-
               </div>
-
-            </div>
+            ) : (
+              <LocationUnavailable
+                onChangeAddress={() => setShowAddressModal(true)}
+              />
+            )
 
           ) : (
 

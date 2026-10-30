@@ -18,6 +18,7 @@ import {
 } from "../../services/productApi";
 import Image from "next/image";
 import Navbar from "../Navbar";
+import LocationUnavailable from "./LocationUnavailable";
 
 export default function ProductsPage() {
     const router = useRouter();
@@ -171,7 +172,7 @@ const selectedAddress =
       address._id === savedAddressFromStorage?._id
   ) ||
   addresses.find(
-    (address: any) => address?.isPrimary === true
+    (address: any) => address?.isPrimary === true || address?.isDefault === true
   ) ||
   addresses[0];
 
@@ -263,6 +264,8 @@ setProducts(newArrivalProducts);
         "GET PRODUCTS ERROR:",
         error
       );
+
+      setProducts([]);
 
       setError(
         error?.message ||
@@ -536,19 +539,21 @@ const handleAddressCreated = async (
 
           ) : (
 
-            !loading && (
-              <div className="mt-10 rounded-2xl bg-white p-10 text-center">
-
-                <p className="text-sm font-medium text-slate-700">
-                  No products available
-                </p>
-
-                <p className="mt-1 text-xs text-slate-400">
-                  Try again later.
-                </p>
-
-              </div>
-            )
+            !loading &&
+              (error ? (
+                <div className="mt-10 rounded-2xl bg-white p-10 text-center">
+                  <p className="text-sm font-medium text-slate-700">
+                    {error}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Please try again or choose another address.
+                  </p>
+                </div>
+              ) : (
+                <LocationUnavailable
+                  onChangeAddress={() => setShowAddressModal(true)}
+                />
+              ))
 
           )}
 

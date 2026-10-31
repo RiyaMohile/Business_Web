@@ -10,6 +10,7 @@ import {
   X,
   ChevronRight,
   MapPin,
+  Undo2,
 } from "lucide-react";
 
 import { useCallback, useEffect, useState } from "react";
@@ -18,18 +19,54 @@ import { useRouter } from "next/navigation";
 import {
   getMyOrders,
   cancelOrder,
+  getEligibleReturnIds,
+  getReturnHistory,
+  requestReturn,
+  verifyReturnOtp,
   parseOrder,
   type OrderFilter,
   type ParsedOrder,
   type StatusTone,
 } from "../services/customerOrderApi";
 
-const FILTERS: OrderFilter[] = [
+type Tab = OrderFilter | "Returns";
+
+const FILTERS: Tab[] = [
   "All",
   "Active",
   "Completed",
   "Cancelled",
+  "Returns",
 ];
+
+const rtext = (r: any, keys: string[]): string => {
+  for (const k of keys) {
+    const v = r?.[k];
+    if (
+      v !== undefined &&
+      v !== null &&
+      typeof v !== "object" &&
+      String(v).trim()
+    ) {
+      return String(v).trim();
+    }
+  }
+  return "";
+};
+
+const fmtReturnDate = (raw: any) => {
+  const d = new Date(raw);
+  return isNaN(d.getTime())
+    ? ""
+    : d.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+};
 
 const CANCEL_REASONS = [
   "Ordered by mistake",
@@ -129,7 +166,7 @@ function OtpBox({ order }: { order: ParsedOrder }) {
 export default function OrdersPage() {
   const router = useRouter();
 
-  const [filter, setFilter] = useState<OrderFilter>("All");
+  const [filter, setFilter] = useState<Tab>("All");
   const [orders, setOrders] = useState<ParsedOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -139,6 +176,21 @@ export default function OrdersPage() {
   const [showCancel, setShowCancel] = useState(false);
   const [reason, setReason] = useState(CANCEL_REASONS[0]);
   const [toast, setToast] = useState("");
+
+  const [eligible, setEligible] = useState<string[]>([]);
+  const [returns, setReturns] = useState<any[]>([]);
+  const [confirmReturn, setConfirmReturn] = useState(false);
+  const [returning, setReturning] = useState(false);
+  const [otpTarget, setOtpTarget] = useState<{
+    returnId: string;
+    orderId: string;
+    justRequested: boolean;
+  } | null>(null);
+  const [otp, setOtp] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [verifying, setVerifying] = useState(false);
+
+  const isReturnsTab = filter === "Returns";
 
   const fetchOrders = useCallback(
     async (silent = false) => {
@@ -151,7 +203,16 @@ export default function OrdersPage() {
         if (!silent) setLoading(true);
         setError("");
 
-        const raw = await getMyOrders(filter);
+        getEligibleReturnIds()
+          .then(setEligible)
+          .catch(() => {});
+
+        if (filter === "Returns") {
+          setReturns(await getReturnHistory());
+          return;
+        }
+
+        const raw = await getMyOrders(filter as OrderFilter);
 
         setOrders(
           raw
@@ -193,6 +254,72 @@ export default function OrdersPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(""), 3000);
+  };
+
+  const handleRequestReturn = async () => {
+    if (!selected) return;
+
+    try {
+      setReturning(true);
+
+      const returnId = await requestReturn(selected.rawId);
+
+      setConfirmReturn(false);
+      setOtp("");
+      setOtpError("");
+      setOtpTarget({
+        returnId,
+        orderId: selected.rawId,
+        justRequested: true,
+      });
+      fetchOrders(true);
+    } catch (err: any) {
+      showToast(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to request return"
+      );
+    } finally {
+      setReturning(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpTarget) return;
+
+    if (otp.trim().length !== 6) {
+      setOtpError("Enter the 6-digit OTP");
+      return;
+    }
+
+    try {
+      setVerifying(true);
+      setOtpError("");
+
+      await verifyReturnOtp(otpTarget.returnId, otp.trim());
+
+      setEligible((e) => e.filter((id) => id !== otpTarget.orderId));
+      setOtpTarget(null);
+      setSelected(null);
+      showToast("Return completed successfully");
+      await fetchOrders(true);
+    } catch (err: any) {
+      setOtpError(
+        err?.response?.data?.message || err?.message || "Invalid OTP"
+      );
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const closeOtp = () => {
+    if (verifying) return;
+    if (otpTarget?.justRequested) {
+      showToast(
+        "Return requested. Visit the store, then enter its OTP from the Returns tab."
+      );
+    }
+    setOtpTarget(null);
   };
 
   const handleCancel = async () => {
@@ -271,6 +398,115 @@ export default function OrdersPage() {
                 Retry
               </button>
             </div>
+          ) : isReturnsTab ? (
+            returns.length === 0 ? (
+              <div className="flex flex-col items-center py-20">
+                <div className="rounded-full bg-[#F1F5F9] p-5">
+                  <Undo2 size={44} className="text-[#94A3B8]" />
+                </div>
+                <p className="mt-3 text-base font-bold text-[#0F172A]">
+                  No Returns Yet
+                </p>
+                <p className="mt-1 text-xs text-[#64748B]">
+                  Items you return will appear here.
+                </p>
+              </div>
+            ) : (
+              returns.map((r, i) => {
+                const order =
+                  r?.orderId && typeof r.orderId === "object"
+                    ? r.orderId
+                    : r?.order && typeof r.order === "object"
+                    ? r.order
+                    : {};
+                const orderNo =
+                  rtext(order, ["orderNumber", "_id"]) ||
+                  rtext(r, ["orderNumber", "orderId"]);
+                const rawStatus =
+                  rtext(r, ["status", "returnStatus"]) || "Requested";
+                const status = rawStatus
+                  .replace(/[_-]/g, " ")
+                  .replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase());
+                const amount =
+                  rtext(r, ["refundAmount", "amount"]) ||
+                  rtext(order, ["totalAmount", "grandTotal", "total"]);
+                const returnId = rtext(r, ["_id", "returnId", "id"]);
+                const awaitingOtp =
+                  !!returnId &&
+                  !/complete|returned|refund|reject|cancel|verified|success|done/.test(
+                    status.toLowerCase()
+                  );
+                const products =
+                  order.products ?? order.items ?? r.products ?? r.items;
+                const titles: string[] = Array.isArray(products)
+                  ? products
+                      .map((p: any) =>
+                        rtext(
+                          p?.postId && typeof p.postId === "object"
+                            ? p.postId
+                            : p,
+                          ["title", "name"]
+                        )
+                      )
+                      .filter(Boolean)
+                  : [];
+
+                return (
+                  <div
+                    key={returnId || i}
+                    className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-[#0F172A]">
+                        {orderNo ? `#${orderNo}` : "Return"}
+                      </span>
+                      <span className="rounded-full bg-[#EFF6FF] px-3 py-1 text-xs font-bold text-[#3B82F6]">
+                        {status}
+                      </span>
+                    </div>
+
+                    {titles.length > 0 && (
+                      <p className="mt-2 line-clamp-2 text-sm text-[#0F172A]">
+                        {titles.join(", ")}
+                      </p>
+                    )}
+
+                    <div className="mt-2 flex items-center justify-between text-xs text-[#64748B]">
+                      <span>
+                        {fmtReturnDate(
+                          r.createdAt ?? r.requestedAt ?? r.updatedAt
+                        )}
+                      </span>
+                      {amount && (
+                        <span className="text-sm font-bold text-[#0F172A]">
+                          ₹{amount}
+                        </span>
+                      )}
+                    </div>
+
+                    {awaitingOtp && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOtp("");
+                          setOtpError("");
+                          setOtpTarget({
+                            returnId,
+                            orderId:
+                              rtext(order, ["_id"]) ||
+                              rtext(r, ["orderId"]),
+                            justRequested: false,
+                          });
+                        }}
+                        className="mt-3 w-full rounded-lg bg-[#0F172A] px-4 py-2 text-sm font-bold text-white"
+                      >
+                        Enter store OTP
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )
           ) : orders.length === 0 ? (
             <div className="flex flex-col items-center py-20">
               <div className="rounded-full bg-[#F1F5F9] p-5">
@@ -438,6 +674,17 @@ export default function OrdersPage() {
               </div>
             </dl>
 
+            {eligible.includes(selected.rawId) && (
+              <button
+                type="button"
+                onClick={() => setConfirmReturn(true)}
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold text-[#0F172A] transition hover:bg-slate-50"
+              >
+                <Undo2 size={18} />
+                Return (within 24 hours)
+              </button>
+            )}
+
             {selected.cancellable && (
               <button
                 type="button"
@@ -518,6 +765,111 @@ export default function OrdersPage() {
                 {cancelling ? "Cancelling..." : "Cancel Order"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* RETURN CONFIRM */}
+      {confirmReturn && selected && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 sm:items-center"
+          onClick={() => !returning && setConfirmReturn(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-white p-5 sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-[#0F172A]">
+              Return this order?
+            </h3>
+            <p className="mt-1 text-sm text-[#64748B]">
+              Orders can be returned within 24 hours of purchase. The store
+              will receive an OTP. Take the product to the store, and enter
+              the OTP the store gives you to complete the return.
+            </p>
+
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                disabled={returning}
+                onClick={() => setConfirmReturn(false)}
+                className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-[#64748B]"
+              >
+                Not now
+              </button>
+              <button
+                type="button"
+                disabled={returning}
+                onClick={handleRequestReturn}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#0F172A] px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {returning && (
+                  <Loader2 size={16} className="animate-spin" />
+                )}
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RETURN OTP */}
+      {otpTarget && (
+        <div
+          className="fixed inset-0 z-[65] flex items-end justify-center bg-black/50 sm:items-center"
+          onClick={closeOtp}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-white p-5 sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-[#0F172A]">
+              {otpTarget.justRequested
+                ? "Return requested"
+                : "Verify return OTP"}
+            </h3>
+            <p className="mt-1 text-sm text-[#64748B]">
+              {otpTarget.justRequested
+                ? "Take the product to the store. Once the store gives you the 6-digit OTP, enter it here. You can also do this later from the Returns tab."
+                : "Enter the 6-digit OTP given by the store to complete your return."}
+            </p>
+
+            <input
+              autoFocus
+              inputMode="numeric"
+              maxLength={6}
+              value={otp}
+              placeholder="------"
+              onChange={(e) =>
+                setOtp(e.target.value.replace(/\D/g, ""))
+              }
+              onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
+              className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-3 text-center text-lg font-bold tracking-[0.5em] outline-none focus:border-[#0F172A]"
+            />
+            {otpError && (
+              <p className="mt-1 text-xs text-red-600">{otpError}</p>
+            )}
+
+            <button
+              type="button"
+              disabled={verifying}
+              onClick={handleVerifyOtp}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0F172A] px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+            >
+              {verifying && <Loader2 size={16} className="animate-spin" />}
+              Verify & Return
+            </button>
+
+            {otpTarget.justRequested && (
+              <button
+                type="button"
+                disabled={verifying}
+                onClick={closeOtp}
+                className="mt-2 w-full rounded-xl px-4 py-2 text-sm font-semibold text-[#64748B]"
+              >
+                I&apos;ll do it at the store
+              </button>
+            )}
           </div>
         </div>
       )}

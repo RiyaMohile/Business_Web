@@ -539,3 +539,89 @@ export const parseOrder = (raw: any): ParsedOrder | null => {
     isCompleted,
   };
 };
+
+// ==========================================
+// RETURNS (mirrors the mobile app)
+// ==========================================
+
+const RETURN_URL = `${API_ORIGIN}/v2/api/order-returns`;
+
+const extractList = (decoded: any): any[] => {
+  if (Array.isArray(decoded)) return decoded;
+
+  if (isObj(decoded)) {
+    for (const k of ["data", "returns", "orders", "items"]) {
+      const v = decoded[k];
+      if (Array.isArray(v)) return v;
+      if (isObj(v)) {
+        const nested = extractList(v);
+        if (nested.length) return nested;
+      }
+    }
+  }
+
+  return [];
+};
+
+const returnOrderId = (o: any): string => {
+  if (!isObj(o)) return "";
+  const order = isObj(o.orderId) ? o.orderId : o;
+  return str(order._id ?? order.id ?? o.orderId);
+};
+
+// Orders still inside the 24-hour return window
+export const getEligibleReturnIds = async (): Promise<string[]> => {
+  const response = await axios.get(`${RETURN_URL}/eligible-orders`, {
+    headers: getAuthHeaders(),
+  });
+
+  return extractList(response.data).map(returnOrderId).filter(Boolean);
+};
+
+export const getReturnHistory = async (): Promise<any[]> => {
+  const response = await axios.get(RETURN_URL, {
+    headers: getAuthHeaders(),
+  });
+
+  return extractList(response.data);
+};
+
+// Returns the new returnId; throws the server message on failure
+export const requestReturn = async (orderId: string): Promise<string> => {
+  const response = await axios.post(
+    RETURN_URL,
+    { orderId },
+    { headers: getAuthHeaders() }
+  );
+
+  const res = response.data;
+
+  if (res?.success === false) {
+    throw new Error(res.message || res.error || "Failed to request return");
+  }
+
+  const d = res?.data ?? res?.return ?? res;
+  const id = (isObj(d) ? d.returnId ?? d._id ?? d.id : null) ?? res?.returnId ?? res?._id;
+
+  if (!id || !str(id)) {
+    throw new Error("Return created but no returnId was received");
+  }
+
+  return str(id);
+};
+
+export const verifyReturnOtp = async (returnId: string, otp: string) => {
+  const response = await axios.post(
+    `${RETURN_URL}/verify-otp`,
+    { returnId, otp },
+    { headers: getAuthHeaders() }
+  );
+
+  if (response.data?.success === false) {
+    throw new Error(
+      response.data.message || response.data.error || "Invalid OTP"
+    );
+  }
+
+  return response.data;
+};

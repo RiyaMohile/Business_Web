@@ -39,8 +39,10 @@ export default function ReturnRefundPolicy() {
     const fetchPage = async () => {
       try {
         const { data } = await axios.get(
-          `${API_URL}/about/page/return-refund-policy`
-        );
+  `${API_URL}/about/page/${encodeURIComponent(
+    "return/refund/exchange-policy"
+  )}`
+);
 
         if (data?.success && data?.data) {
           setPage(data.data);

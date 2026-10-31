@@ -12,8 +12,14 @@ import {
   Loader2,
   X,
   UserRound,
-    Phone,
+  Phone,
+  ShoppingCart,
 } from "lucide-react";
+
+import {
+  createCart,
+  addPostToCart,
+} from "../../services/cartApi";
 
 import { getStoreDetailsWithProducts, toggleStoreLike, getLikedStores } from "../../services/storeApi";
 import AddressModal from "../address/AddressModal";
@@ -76,9 +82,13 @@ interface Product {
 function ProductCard({
   product,
   onClick,
+  onAddToCart,
+  addingToCart,
 }: {
   product: Product;
   onClick: () => void;
+  onAddToCart: (product: Product) => void;
+  addingToCart: boolean;
 }) {
   const name = product.topic || "Product";
 
@@ -87,7 +97,7 @@ function ProductCard({
   )?.mediaUrl;
 
   const price = product.price?.amount;
-  const isInStock = product.totalStock > 0;
+  const isInStock = Number(product.totalStock || 0) > 0;
 
   return (
     <div
@@ -113,20 +123,43 @@ function ProductCard({
           {name}
         </h3>
 
-        {price !== undefined && (
-          <p className="mt-1 text-[13px] font-bold text-[#172554]">
-            {product.price?.currency === "INR" ? "₹" : ""}
-            {price}
-          </p>
-        )}
+        {/* PRICE + STOCK + ADD TO CART */}
+        <div className="mt-2 flex items-center justify-between gap-1">
+          <div className="min-w-0">
+            {price !== undefined && (
+              <p className="text-[13px] font-bold text-[#172554]">
+                {product.price?.currency === "INR" ? "₹" : ""}
+                {price}
+              </p>
+            )}
 
-        <p
-          className={`mt-0.5 text-[9px] font-medium ${
-            isInStock ? "text-[#16A34A]" : "text-red-500"
-          }`}
-        >
-          {isInStock ? "In Stock" : "Out of Stock"}
-        </p>
+            <p
+              className={`mt-0.5 text-[9px] font-medium ${
+                isInStock ? "text-[#16A34A]" : "text-red-500"
+              }`}
+            >
+              {isInStock ? "In Stock" : "Out of Stock"}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={!isInStock || addingToCart}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddToCart(product);
+            }}
+            className="flex shrink-0 items-center gap-1 rounded-lg bg-[#6D28D9] px-2 py-2 text-[9px] font-semibold text-white transition hover:bg-[#5B21B6] disabled:cursor-not-allowed disabled:bg-gray-300 sm:px-2.5"
+          >
+            {addingToCart ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <ShoppingCart className="h-3 w-3" />
+            )}
+
+            {addingToCart ? "Adding" : "Add"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -173,6 +206,14 @@ export default function CustomerStorePage({
 const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 const [likedStores, setLikedStores] = useState<LikedStore[]>([]);
 const [likedStoresLoading, setLikedStoresLoading] = useState(false);
+const [selectedCartProduct, setSelectedCartProduct] =
+  useState<Product | null>(null);
+
+const [selectedCartSize, setSelectedCartSize] =
+  useState("");
+
+const [addingProductId, setAddingProductId] =
+  useState<string | null>(null);
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   useEffect(() => {
@@ -262,6 +303,157 @@ const handleProductClick = (productId: string) => {
   }
 
   router.push(`/products/details?postId=${productId}`);
+};
+
+// ==========================================
+// ADD PRODUCT TO CART
+// ==========================================
+
+const addProductToCart = async (
+  product: Product,
+  size: string
+) => {
+  if (addingProductId) return;
+
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    setSelectedProductId(product._id);
+    setShowLoginPopup(true);
+    setSelectedCartProduct(null);
+    return;
+  }
+
+  const storeId =
+    typeof product.store === "string"
+      ? product.store
+      : (product.store as any)?._id;
+
+  if (!storeId) {
+    alert("Store information is missing.");
+    return;
+  }
+
+  try {
+    setAddingProductId(product._id);
+
+    // Save store ID
+    const existingStoreIds = JSON.parse(
+      localStorage.getItem("cartStoreIds") || "[]"
+    );
+
+    if (!existingStoreIds.includes(storeId)) {
+      existingStoreIds.push(storeId);
+
+      localStorage.setItem(
+        "cartStoreIds",
+        JSON.stringify(existingStoreIds)
+      );
+    }
+
+    localStorage.setItem("cartStoreId", storeId);
+
+    // Create or get existing cart
+    const cartResponse = await createCart(storeId);
+
+    const cart = cartResponse?.cart;
+    const cartId = cart?._id;
+
+    if (!cartId) {
+      throw new Error("Cart ID not found.");
+    }
+
+    // Check same product with same size
+    const alreadyAdded = Array.isArray(cart?.posts)
+      ? cart.posts.some((item: any) => {
+          const existingPostId =
+            item.postId?._id || item.postId;
+
+          return (
+            String(existingPostId) === String(product._id) &&
+            String(item.size || "") === String(size || "")
+          );
+        })
+      : false;
+
+    if (alreadyAdded) {
+      alert(
+        "This product with the selected size is already in your cart."
+      );
+      setSelectedCartProduct(null);
+      return;
+    }
+
+    // Add product
+    const response = await addPostToCart({
+      cartId,
+      postId: product._id,
+      size,
+      quantity: 1,
+    });
+
+    console.log("ADD TO CART RESPONSE:", response);
+
+    alert("Product added to cart successfully!");
+
+    setSelectedCartProduct(null);
+    setSelectedCartSize("");
+
+  } catch (error: any) {
+    console.error("ADD TO CART ERROR:", error);
+
+    alert(
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to add product to cart."
+    );
+  } finally {
+    setAddingProductId(null);
+  }
+};
+
+
+// ==========================================
+// HANDLE ADD TO CART CLICK
+// ==========================================
+
+const handleAddToCartClick = (product: Product) => {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    setSelectedProductId(product._id);
+    setShowLoginPopup(true);
+    return;
+  }
+
+  const availableSizes =
+    product.inventory?.filter(
+      (item) => Number(item.stock) > 0
+    ) || [];
+
+  // More than one available size: show popup
+  if (availableSizes.length > 1) {
+    setSelectedCartProduct(product);
+    setSelectedCartSize("");
+    return;
+  }
+
+  // Only one available size: add directly
+  if (availableSizes.length === 1) {
+    addProductToCart(
+      product,
+      availableSizes[0].size
+    );
+    return;
+  }
+
+  // No inventory size rows: use totalStock fallback
+  if (Number(product.totalStock) > 0) {
+    addProductToCart(product, "");
+    return;
+  }
+
+  alert("This product is out of stock.");
 };
 
 
@@ -721,6 +913,7 @@ const handleShareStore = async () => {
     );
   }
 
+  
   // ======================================================
   // ADDRESS MODAL ONLY
   // ======================================================
@@ -988,17 +1181,108 @@ const handleShareStore = async () => {
             ) : (
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
                 {filteredProducts.map((product) => (
-                  <ProductCard
-  key={product._id}
-  product={product}
-  onClick={() => handleProductClick(product._id)}
-/>
-                ))}
+  <ProductCard
+    key={product._id}
+    product={product}
+    onClick={() => handleProductClick(product._id)}
+    onAddToCart={handleAddToCartClick}
+    addingToCart={addingProductId === product._id}
+  />
+))}
               </div>
             )}
           </section>
         </div>
       </div>
+
+      {/* ==========================================
+    SELECT PRODUCT SIZE MODAL
+========================================== */}
+
+{selectedCartProduct && (
+  <div
+    className="fixed inset-0 z-[500] flex items-center justify-center bg-black/50 px-4"
+    onClick={() => {
+      setSelectedCartProduct(null);
+      setSelectedCartSize("");
+    }}
+  >
+    <div
+      className="relative w-full max-w-[380px] rounded-2xl bg-white p-5 shadow-2xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* CLOSE BUTTON */}
+      <button
+        type="button"
+        onClick={() => {
+          setSelectedCartProduct(null);
+          setSelectedCartSize("");
+        }}
+        className="absolute right-4 top-4 rounded-full p-1 text-gray-500 hover:bg-gray-100"
+      >
+        <X size={20} />
+      </button>
+
+      <h2 className="text-lg font-bold text-[#172554]">
+        Select Size
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Choose your preferred size for{" "}
+        <span className="font-semibold text-gray-700">
+          {selectedCartProduct.topic}
+        </span>
+      </p>
+
+      {/* AVAILABLE SIZES */}
+      <div className="mt-5 flex flex-wrap gap-3">
+        {selectedCartProduct.inventory
+          ?.filter((item) => Number(item.stock) > 0)
+          .map((item) => (
+            <button
+              key={item.size}
+              type="button"
+              onClick={() => setSelectedCartSize(item.size)}
+              className={`min-w-12 rounded-lg border px-4 py-2.5 text-sm font-semibold transition ${
+                selectedCartSize === item.size
+                  ? "border-[#6D28D9] bg-[#6D28D9] text-white"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-[#6D28D9]"
+              }`}
+            >
+              {item.size}
+
+              
+            </button>
+          ))}
+      </div>
+
+      {/* ADD BUTTON */}
+      <button
+        type="button"
+        disabled={!selectedCartSize || addingProductId === selectedCartProduct._id}
+        onClick={() =>
+          addProductToCart(
+            selectedCartProduct,
+            selectedCartSize
+          )
+        }
+        className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#6D28D9] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#5B21B6] disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {addingProductId === selectedCartProduct._id ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Adding...
+          </>
+        ) : (
+          <>
+            <ShoppingCart size={17} />
+            Add to Cart
+          </>
+        )}
+      </button>
+    </div>
+  </div>
+)}
 
       {/* =================================================
           ADDRESS MODAL

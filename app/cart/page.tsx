@@ -708,11 +708,16 @@ return (
     post?._id ||
     item.postId;
 
-  const image =
-    post?.media?.[0]?.mediaUrl ||
-    post?.image ||
-    post?.imageUrl ||
-    null;
+  const activeMedia = post?.media?.find(
+  (media: any) =>
+    media.isDeleted !== true && media.mediaUrl
+);
+
+const image =
+  activeMedia?.mediaUrl ||
+  post?.image ||
+  post?.imageUrl ||
+  null;
 
   const title =
     post?.topic ||

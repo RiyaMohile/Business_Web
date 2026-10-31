@@ -1,8 +1,8 @@
-
-
 import {
   ArrowLeft,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Heart,
   Loader2,
   Share2,
@@ -21,6 +21,7 @@ import {
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -106,6 +107,40 @@ const [deliveryError, setDeliveryError] = useState<{
   const [showAllReviews, setShowAllReviews] =
     useState(false);
 
+    const touchStartX = useRef<number | null>(null);
+
+const handleTouchStart = (
+  e: React.TouchEvent<HTMLDivElement>
+) => {
+  touchStartX.current = e.touches[0].clientX;
+};
+
+const handleTouchEnd = (
+  e: React.TouchEvent<HTMLDivElement>
+) => {
+  if (touchStartX.current === null) return;
+
+  const touchEndX = e.changedTouches[0].clientX;
+  const difference = touchStartX.current - touchEndX;
+
+  if (Math.abs(difference) > 50) {
+    if (difference > 0) {
+      // Swipe left: Next image
+      setSelectedImage((prev) =>
+        (prev + 1) % productImages.length
+      );
+    } else {
+      // Swipe right: Previous image
+      setSelectedImage((prev) =>
+        (prev - 1 + productImages.length) %
+        productImages.length
+      );
+    }
+  }
+
+  touchStartX.current = null;
+};
+
   // ==========================================
   // FETCH PRODUCT
   // ==========================================
@@ -156,16 +191,30 @@ const [deliveryError, setDeliveryError] = useState<{
             postId
           );
 
-          const response =
-            await getProductById(
-              postId,
-              customerAddressId
-            );
+          const response = await getProductById(
+  postId,
+  customerAddressId
+);
 
-          console.log(
-            "PRODUCT DETAIL RESPONSE:",
-            response
-          );
+const productData = response.data;
+
+console.log(
+  "PRODUCT INVENTORY:",
+  productData.inventory
+);
+
+console.log(
+  "TOTAL STOCK:",
+  productData.totalStock
+);
+
+setProduct(productData);
+
+const availableSize = productData.inventory?.find(
+  (item) => Number(item.stock) > 0
+);
+
+setSelectedSize(availableSize?.size || "");
 
           console.log(
             "PRODUCT DETAIL:",
@@ -898,14 +947,17 @@ if (!storeId) {
         "
       >
 
-        <div
-          className="
-            relative
-            aspect-square
-            w-full
-            overflow-hidden
-          "
-        >
+       <div
+  className="
+    relative
+    aspect-square
+    w-full
+    overflow-hidden
+    touch-pan-y
+  "
+  onTouchStart={handleTouchStart}
+  onTouchEnd={handleTouchEnd}
+>
 
           <Image
             src={
@@ -923,6 +975,73 @@ if (!storeId) {
               object-cover
             "
           />
+
+          {productImages.length > 1 && (
+  <>
+    {/* Previous Image */}
+    <button
+      type="button"
+      onClick={() =>
+        setSelectedImage((prev) =>
+          (prev - 1 + productImages.length) %
+          productImages.length
+        )
+      }
+      aria-label="Previous image"
+      className="
+        absolute
+        left-3
+        top-1/2
+        z-10
+        flex
+        h-10
+        w-10
+        -translate-y-1/2
+        items-center
+        justify-center
+        rounded-full
+        bg-white/90
+        text-slate-800
+        shadow-md
+        transition
+        hover:bg-white
+      "
+    >
+      <ChevronLeft size={24} />
+    </button>
+
+    {/* Next Image */}
+    <button
+      type="button"
+      onClick={() =>
+        setSelectedImage((prev) =>
+          (prev + 1) % productImages.length
+        )
+      }
+      aria-label="Next image"
+      className="
+        absolute
+        right-3
+        top-1/2
+        z-10
+        flex
+        h-10
+        w-10
+        -translate-y-1/2
+        items-center
+        justify-center
+        rounded-full
+        bg-white/90
+        text-slate-800
+        shadow-md
+        transition
+        hover:bg-white
+      "
+    >
+      <ChevronRight size={24} />
+    </button>
+  </>
+)}
 
         </div>
 
@@ -1205,41 +1324,43 @@ if (!storeId) {
 
         {/* SIZES */}
 
-        <div
-          className="
-            mt-3
-            flex
-            gap-2
-          "
-        >
+        {/* SIZES */}
 
-          {product.inventory?.map((item) => (
-  <button
-    key={item.size}
-    type="button"
-    disabled={item.stock <= 0}
-    onClick={() => setSelectedSize(item.size)}
-    className={`
-      h-7
-      min-w-7
-      rounded-md
-      border
-      px-2
-      text-xs
-      ${
-        selectedSize === item.size
-          ? "border-black bg-black text-white"
-          : item.stock <= 0
-          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
-          : "border-slate-300 bg-white"
-      }
-    `}
-  >
-    {item.size}
-  </button>
-))}
+{product.inventory && product.inventory.length > 0 && (
+  <div className="mt-3">
+    <p className="mb-2 text-sm font-semibold text-slate-800">
+      Size:
+    </p>
 
-        </div>
+    <div className="flex flex-wrap gap-3">
+      {product.inventory.map((item) => {
+        const isAvailable = Number(item.stock) > 0;
+
+        return (
+          <button
+            key={item._id || item.size}
+            type="button"
+            disabled={!isAvailable}
+            onClick={() => setSelectedSize(item.size)}
+            className={`
+              h-12 min-w-16 rounded-xl border px-5
+              text-sm font-medium transition
+              ${
+                selectedSize === item.size
+                  ? "border-[#6D28D9] bg-[#6D28D9] text-white"
+                  : isAvailable
+                  ? "border-slate-200 bg-white text-slate-700 hover:border-[#6D28D9]"
+                  : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+              }
+            `}
+          >
+            {item.size}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+)}
 
 
         <div
@@ -1267,7 +1388,7 @@ if (!storeId) {
                 size={18}
               />
             }
-            title="7 Days"
+           title="24 Hours"
             subtitle="Easy Returns"
           />
 

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 import Login from "../auth/desktop/Login";
 import Register from "../auth/desktop/Register";
@@ -10,9 +11,37 @@ import Otp from "../auth/desktop/Otp";
 
 export default function DesktopDashboard() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   const isRegisterPage = pathname === "/register";
   const isOtpPage = pathname === "/otp";
+
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem("token");
+
+      if (token) {
+        router.replace("/products");
+        return;
+      }
+    } catch (error) {
+      console.error("AUTH CHECK ERROR:", error);
+    }
+
+    setCheckingAuth(false);
+  }, [router]);
+
+  if (checkingAuth) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-white">
+        <p className="text-sm font-medium text-[#6D28D9]">
+          Loading...
+        </p>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen overflow-hidden bg-white">

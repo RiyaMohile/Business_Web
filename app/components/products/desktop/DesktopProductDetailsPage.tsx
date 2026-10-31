@@ -1,12 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api from "../../../services/api";
 
 import {
   ArrowLeft,
+  ChevronLeft,
   ChevronRight,
   Heart,
   Loader2,
@@ -61,6 +62,7 @@ export default function DesktopProductDetailsPage() {
 
   const [selectedImage, setSelectedImage] =
     useState(0);
+    const touchStartX = useRef<number | null>(null);
 
   const [selectedSize, setSelectedSize] =
     useState("");
@@ -159,14 +161,17 @@ const [deliveryError, setDeliveryError] = useState<{
         );
 
 
-        setProduct(
-          response.data
-        );
+        const productData = response.data;
 
-        // Pre-select the first size that actually has stock.
-        const availableSize = response.data?.inventory?.find(
-          (item: any) => Number(item.stock) > 0
-        );
+console.log("DESKTOP INVENTORY:", productData.inventory);
+
+setProduct(productData);
+
+const availableSize = productData.inventory?.find(
+  (item) => Number(item.stock) > 0
+);
+
+setSelectedSize(availableSize?.size || "");
         if (availableSize) {
           setSelectedSize(availableSize.size);
         }
@@ -352,6 +357,38 @@ const handleSubmitReview = async () => {
     images.length > 0
       ? images
       : ["/file.svg"];
+
+      const handleTouchStart = (
+  e: React.TouchEvent<HTMLDivElement>
+) => {
+  touchStartX.current = e.touches[0].clientX;
+};
+
+const handleTouchEnd = (
+  e: React.TouchEvent<HTMLDivElement>
+) => {
+  if (touchStartX.current === null) return;
+
+  const touchEndX = e.changedTouches[0].clientX;
+  const difference = touchStartX.current - touchEndX;
+
+  if (Math.abs(difference) > 50) {
+    if (difference > 0) {
+      // Swipe left: Next image
+      setSelectedImage((prev) =>
+        (prev + 1) % productImages.length
+      );
+    } else {
+      // Swipe right: Previous image
+      setSelectedImage((prev) =>
+        (prev - 1 + productImages.length) %
+        productImages.length
+      );
+    }
+  }
+
+  touchStartX.current = null;
+};
 
 
   // ====================================================
@@ -782,12 +819,92 @@ const handleBuyNow = async () => {
 <div className="flex flex-col">
 
   {/* MAIN IMAGE */}
- <div className="relative h-[600px] w-[600px] overflow-hidden rounded-xl bg-[#F6F6F7]">
+ <div
+  className="
+    relative
+    h-[600px]
+    w-[600px]
+    overflow-hidden
+    rounded-xl
+    bg-[#F6F6F7]
+    touch-pan-y
+  "
+  onTouchStart={handleTouchStart}
+  onTouchEnd={handleTouchEnd}
+>
     <img
       src={productImages[selectedImage]}
       alt={product.topic}
       className="h-full w-full object-cover"
     />
+
+    {/* IMAGE NAVIGATION ARROWS */}
+{productImages.length > 1 && (
+  <>
+    {/* PREVIOUS IMAGE */}
+    <button
+      type="button"
+      onClick={() =>
+        setSelectedImage((prev) =>
+          (prev - 1 + productImages.length) %
+          productImages.length
+        )
+      }
+      aria-label="Previous image"
+      className="
+        absolute
+        left-4
+        top-1/2
+        z-10
+        flex
+        h-12
+        w-12
+        -translate-y-1/2
+        items-center
+        justify-center
+        rounded-full
+        bg-white/90
+        text-slate-800
+        shadow-lg
+        transition
+        hover:bg-white
+      "
+    >
+      <ChevronLeft size={26} />
+    </button>
+
+    {/* NEXT IMAGE */}
+    <button
+      type="button"
+      onClick={() =>
+        setSelectedImage((prev) =>
+          (prev + 1) % productImages.length
+        )
+      }
+      aria-label="Next image"
+      className="
+        absolute
+        right-4
+        top-1/2
+        z-10
+        flex
+        h-12
+        w-12
+        -translate-y-1/2
+        items-center
+        justify-center
+        rounded-full
+        bg-white/90
+        text-slate-800
+        shadow-lg
+        transition
+        hover:bg-white
+      "
+    >
+      <ChevronRight size={26} />
+    </button>
+  </>
+)}
 
     {/* LIKE */}
     <button
@@ -842,7 +959,7 @@ const handleBuyNow = async () => {
     </button>
 
     {/* FULLSCREEN */}
-    <button
+    {/* <button
       type="button"
       className="
         absolute
@@ -859,7 +976,7 @@ const handleBuyNow = async () => {
       "
     >
       <Maximize2 size={20} />
-    </button>
+    </button> */}
   </div>
 
 
@@ -1028,86 +1145,53 @@ const handleBuyNow = async () => {
             </div>
 
 
+
             {/* SIZE */}
 
-            <div className="mt-7">
+<div className="mt-7">
+  <div className="flex items-center justify-between">
+    <span className="text-sm font-semibold text-[#101828]">
+      Size:
+    </span>
 
-              <div className="flex items-center justify-between">
+    {/* <button
+      type="button"
+      className="flex items-center gap-2 text-sm font-semibold text-[#6D28D9]"
+    >
+      <Ruler size={17} />
+      Size Guide
+    </button> */}
+  </div>
 
-                <span className="text-sm font-semibold text-[#101828]">
-                  Size:
-                </span>
+  <div className="mt-3 flex flex-wrap gap-3">
+    {product.inventory?.map((item) => {
+      const isAvailable = Number(item.stock) > 0;
 
-                <button
-                  type="button"
-                  className="flex items-center gap-2 text-sm font-semibold text-[#6D28D9]"
-                >
-
-                  <Ruler
-                    size={17}
-                  />
-
-                  Size Guide
-
-                </button>
-
-              </div>
-
-
-              <div className="mt-3 flex gap-3">
-
-                {[
-                  "S",
-                  "M",
-                  "L",
-                  "XL",
-                  "XXL",
-                ].map(
-                  (size) => (
-
-                    <button
-                      key={size}
-                      type="button"
-                      disabled={
-                        hasInventory &&
-                        Number(
-                          product?.inventory?.find((i) => i.size === size)?.stock ?? 0
-                        ) <= 0
-                      }
-                      onClick={() =>
-                        setSelectedSize(
-                          size
-                        )
-                      }
-                      className={`
-                        h-12
-                        min-w-[62px]
-                        rounded-xl
-                        border
-                        px-5
-                        text-sm
-                        font-medium
-                        disabled:cursor-not-allowed
-                        disabled:opacity-40
-                        ${
-                          selectedSize ===
-                          size
-                            ? "border-[#6D28D9] bg-[#6D28D9] text-white"
-                            : "border-slate-200 bg-white text-[#101828]"
-                        }
-                      `}
-                    >
-
-                      {size}
-
-                    </button>
-
-                  )
-                )}
-
-              </div>
-
-            </div>
+      return (
+        <button
+          key={item._id || item.size}
+          type="button"
+          disabled={!isAvailable}
+          onClick={() => setSelectedSize(item.size)}
+          className={`
+            h-12 min-w-[62px] rounded-xl border px-5
+            text-sm font-medium transition
+            disabled:cursor-not-allowed
+            ${
+              selectedSize === item.size
+                ? "border-[#6D28D9] bg-[#6D28D9] text-white"
+                : isAvailable
+                ? "border-slate-200 bg-white text-[#101828]"
+                : "border-slate-200 bg-slate-100 text-slate-400"
+            }
+          `}
+        >
+          {item.size}
+        </button>
+      );
+    })}
+  </div>
+</div>
 
 
             {/* DIVIDER */}
@@ -1120,14 +1204,12 @@ const handleBuyNow = async () => {
             <div className="grid grid-cols-4 divide-x divide-slate-200">
 
   <DesktopFeature
-    icon={
-      <ShieldCheck
-        size={25}
-      />
-    }
-    title="7 Days"
-    subtitle="Easy Returns"
-  />
+  icon={
+    <ShieldCheck size={25} />
+  }
+  title="24 Hours"
+  subtitle="Easy Returns"
+/>
 
   {/* Availability + City */}
   <DesktopFeature

@@ -42,7 +42,9 @@ export interface Product {
   color?: string;
 
   totalStock?: number;
-    inventory?: {
+
+  inventory?: {
+      _id?: string;
     size: string;
     stock: number;
     lastUpdated?: string;
@@ -287,8 +289,8 @@ export interface ProductDetail {
   color?: string;
 
   totalStock?: number;
-
-    inventory?: {
+  inventory?: {
+      _id?: string;
     size: string;
     stock: number;
     lastUpdated?: string;

@@ -9,6 +9,9 @@ const BASE_URL =
 
 export interface ProductMedia {
   mediaUrl: string;
+  mediaName?: string;
+  mediaPath?: string;
+  isDeleted?: boolean;
 }
 
 export interface ProductPrice {
@@ -248,6 +251,7 @@ export interface ProductUser {
 export interface ProductStore {
   _id?: string;
   storeName?: string;
+  storeId?: string;
   address?: {
     addressId?: string;
     area?: string;

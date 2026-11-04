@@ -1,18 +1,56 @@
 import type { Metadata } from "next";
-import ResponsiveHome from "./components/ResponsiveHome";
+import HomeClient from "./HomeClient";
 
 export const metadata: Metadata = {
-  title: "Thover",
-  description: "Discover local products, sellers, businesses, and services near you.",
+  title: "Thover – Hyperlocal Marketplace for Local Shopping",
+  description:
+    "Thover is a hyperlocal marketplace where you can discover local stores, explore products, and shop from businesses near you.",
+
+  alternates: {
+    canonical: "https://thover.in/",
+  },
+
   openGraph: {
-    title: "Thover",
-    description: "Discover local products and businesses near you.",
+    type: "website",
+    title: "Thover – Hyperlocal Marketplace",
+    description:
+      "Discover local stores, explore products and shop from nearby businesses with Thover.",
     url: "https://thover.in/",
     siteName: "Thover",
-    type: "website",
+  },
+
+  twitter: {
+    card: "summary",
+    title: "Thover – Hyperlocal Marketplace",
+    description:
+      "Discover local stores and shop products near you with Thover.",
+  },
+
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 
 export default function Home() {
-  return <ResponsiveHome />;
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Thover",
+    alternateName: "Thover Marketplace",
+    url: "https://thover.in/",
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(websiteSchema),
+        }}
+      />
+
+      <HomeClient />
+    </>
+  );
 }

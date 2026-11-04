@@ -9,34 +9,19 @@ export default function CustomerLandingPage() {
   const router = useRouter();
 
   const [comingSoonModal, setComingSoonModal] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
-
-  // Check existing login
   useEffect(() => {
-    const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token");
 
-    if (token) {
-      router.replace("/products");
-      return;
-    }
-
-    setCheckingAuth(false);
-  }, [router]);
+  if (token) {
+    router.replace("/products");
+  }
+}, [router]);
 
   const handleComingSoon = () => {
     setComingSoonModal(true);
   };
 
-  // Prevent landing page from showing before auth check
-  if (checkingAuth) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-sm font-medium text-[#6D28D9]">
-          Loading...
-        </p>
-      </div>
-    );
-  }
+ 
 
   return (
     <main className="min-h-[100dvh] bg-white">
@@ -68,15 +53,11 @@ export default function CustomerLandingPage() {
             Marketplace
           </h2>
 
-          <div className="mt-2 flex flex-col items-center">
-            <p className="text-[20px] font-medium leading-tight text-[#475569]">
-              Best from local stores
-            </p>
-
-            <p className="mt-1 text-[20px] font-medium leading-tight text-[#475569]">
-              Just a tap away
-            </p>
-          </div>
+          <p className="mt-3 max-w-[380px] text-[14px] leading-6 text-[#64748B]">
+  Discover nearby local stores, explore products, and shop
+  from local businesses with Thover. Shop local and support
+  local businesses.
+</p>
 
           {/* ILLUSTRATION */}
           <div className="mt-5 flex w-full flex-1 items-center justify-center">

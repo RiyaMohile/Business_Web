@@ -497,6 +497,10 @@ export default function CheckoutPage() {
       try {
         const token = localStorage.getItem("token");
 
+
+        console.log("TOKEN:", token);
+console.log("TOKEN EXISTS:", !!token);
+
         const response = await fetch(
           `https://api.thover.in/v1/api/post/post/${firstPostId}`,
           {

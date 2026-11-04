@@ -49,6 +49,8 @@ const [userCity, setUserCity] =
   const [error, setError] =
     useState("");
 
+    const [serviceAvailable, setServiceAvailable] = useState(true);
+const [availableStores, setAvailableStores] = useState(0);
   // ==========================================
   // INITIAL CHECK
   // ==========================================
@@ -237,44 +239,86 @@ setAddressId(selectedAddress._id);
   // GET TRENDING PRODUCTS
   // ==========================================
 
-  const loadProducts = async (
-    customerAddressId: string
-  ) => {
-    try {
-      setLoading(true);
-      setError("");
+  
+const loadProducts = async (customerAddressId: string) => {
+  try {
+    setLoading(true);
+    setError("");
+    setProducts([]);
 
-      const response = await getNewArrivalProducts(
-  customerAddressId,
-  1,
-  50
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const response = await fetch(
+      `https://api.thover.in/v2/api/store/nearby-delivery-posts?addressId=${encodeURIComponent(
+        customerAddressId
+      )}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const contentType =
+      response.headers.get("content-type") || "";
+
+    if (!contentType.includes("application/json")) {
+      throw new Error(
+        "API did not return JSON. Check backend route."
+      );
+    }
+
+    const result = await response.json();
+
+    
+
+    if (!response.ok) {
+  throw new Error(
+    result.message || "Failed to load nearby products."
+  );
+}
+
+console.log("NEARBY PRODUCTS RESPONSE:", result);
+
+setServiceAvailable(result.serviceAvailable === true);
+setAvailableStores(result.availableStores ?? 0);
+
+if (!result.serviceAvailable) {
+  setProducts([]);
+  return;
+}
+
+const filteredPosts = (result.posts || []).map(
+  (post: Product) => ({
+    ...post,
+    media: (post.media || []).filter(
+      (image: any) => image.isDeleted !== true
+    ),
+  })
 );
 
-      console.log(
-        "PRODUCT RESPONSE:",
-        response
-      );
+setProducts(filteredPosts);
 
-      const newArrivalProducts = (response?.data || [])
-  .filter((post: any) => post?._id);
+  } catch (error: any) {
+    console.error("NEARBY PRODUCTS ERROR:", error);
 
-setProducts(newArrivalProducts);
-    } catch (error: any) {
-      console.error(
-        "GET PRODUCTS ERROR:",
-        error
-      );
+    setProducts([]);
+    setError(
+      error.message || "Unable to load nearby products."
+    );
 
-      setProducts([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
-      setError(
-        error?.message ||
-          "Unable to load products."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
 
   
 useEffect(() => {
@@ -465,97 +509,78 @@ const handleAddressCreated = async (
             </div>
           )}
 
-          {/* PRODUCTS */}
+         
+{/* PRODUCTS */}
 
-          {products.length > 0 ? (
-
-            <div className="grid grid-cols-2 gap-4">
-  {products.map((product) => (
-    <div
-      key={product._id}
-      onClick={() =>
-        router.push(
-          `/products/details?postId=${product._id}`
-        )
-      }
-      className="
-        cursor-pointer
-        rounded-2xl
-        border
-        border-slate-100
-        bg-white
-        p-3
-        shadow-sm
-        transition
-        hover:-translate-y-1
-      "
-    >
-      {/* IMAGE AREA */}
-      <div className="aspect-square w-full">
-        {product.media?.[0]?.mediaUrl ? (
-          <img
-            src={product.media[0].mediaUrl}
-            alt={product.topic}
-            className="
-              h-full
-              w-full
-              rounded-xl
-              object-cover
-            "
-          />
-        ) : (
-          /* No image → keep blank space */
-          <div className="flex h-full w-full items-center justify-center rounded-xl bg-slate-50">
-    <span className="text-sm font-medium text-slate-400">
-      No Image
-    </span>
+{loading && products.length === 0 ? (
+  <div className="mt-10 flex justify-center">
+    <Loader2 className="animate-spin text-[#6D28D9]" size={28} />
   </div>
-        )}
-      </div>
-
-      <p
-        className="
-          mt-3
-          text-sm
-          font-semibold
-          text-slate-900
-        "
+) : products.length > 0 ? (
+  <div className="grid grid-cols-2 gap-4">
+    {products.map((product) => (
+      <div
+        key={product._id}
+        onClick={() =>
+          router.push(`/products/details?postId=${product._id}`)
+        }
+        className="cursor-pointer rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:-translate-y-1"
       >
-        {product.topic}
-      </p>
-
-      <p
-        className="
-          mt-1
-          font-bold
-          text-[#6D28D9]
-        "
-      >
-        ₹{product.price?.amount}
-      </p>
-    </div>
-  ))}
-</div>
-
+        <div className="aspect-square w-full">
+          {product.media?.[0]?.mediaUrl ? (
+            <img
+              src={product.media[0].mediaUrl}
+              alt={product.topic}
+              className="h-full w-full rounded-xl object-cover"
+            />
           ) : (
-
-            !loading &&
-              (error ? (
-                <div className="mt-10 rounded-2xl bg-white p-10 text-center">
-                  <p className="text-sm font-medium text-slate-700">
-                    {error}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Please try again or choose another address.
-                  </p>
-                </div>
-              ) : (
-                <LocationUnavailable
-                  onChangeAddress={() => setShowAddressModal(true)}
-                />
-              ))
-
+            <div className="flex h-full w-full items-center justify-center rounded-xl bg-slate-50">
+              <span className="text-sm font-medium text-slate-400">
+                No Image
+              </span>
+            </div>
           )}
+        </div>
+
+        <p className="mt-3 text-sm font-semibold text-slate-900">
+          {product.topic}
+        </p>
+
+        <p className="mt-1 font-bold text-[#6D28D9]">
+          ₹{product.price?.amount}
+        </p>
+      </div>
+    ))}
+  </div>
+) : !serviceAvailable && !search.trim() ? (
+  <div className="mt-6">
+    <LocationUnavailable
+      onChangeAddress={() => setShowAddressModal(true)}
+    />
+
+    <p className="mt-3 text-center text-sm text-slate-500">
+      Our service is not available in your area.
+      {availableStores > 0 &&
+        ` Only ${availableStores} stores found nearby.`}
+    </p>
+  </div>
+) : error ? (
+  <div className="mt-10 rounded-2xl bg-white p-10 text-center">
+    <p className="text-sm font-medium text-slate-700">
+      {error}
+    </p>
+    <p className="mt-1 text-xs text-slate-400">
+      Please try again or choose another address.
+    </p>
+  </div>
+) : search.trim() ? (
+  <div className="mt-10 rounded-2xl bg-white p-10 text-center">
+    <p className="text-sm font-medium text-slate-700">
+      No products found.
+    </p>
+  </div>
+) : null}
+
 
         </div>
 

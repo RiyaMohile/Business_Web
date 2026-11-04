@@ -20,6 +20,7 @@ import {
   Minus,
   Plus,
   Maximize2,
+  StoreIcon,
 } from "lucide-react";
 
 import {
@@ -1368,7 +1369,6 @@ const handleBuyNow = async () => {
 
             <div className="mt-5 grid grid-cols-[1.5fr_0.8fr] gap-6">
 
-              {/* PRODUCT DESCRIPTION */}
 
 {/* PRODUCT DESCRIPTION */}
 
@@ -1420,6 +1420,38 @@ const handleBuyNow = async () => {
 </div>
 
 </div>
+
+
+{/* STORE INFORMATION CARD */}
+
+<div className="mt-5 flex items-center gap-3 rounded-xl border border-slate-100 bg-[#F8FAFC] p-3">
+
+  {/* STORE ICON */}
+  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#EEF4FF]">
+    <StoreIcon className="h-5 w-5 text-[#3674D9]" />
+  </div>
+
+  {/* STORE DETAILS */}
+  <div className="min-w-0 flex-1">
+
+    <h3 className="truncate text-sm font-bold text-[#101828]">
+      {product.store?.storeName || "Store"}
+    </h3>
+
+    <p className="mt-0.5 text-[11px] text-[#7182A6]">
+      Vendor ID: {product.store?.storeId || "N/A"}
+    </p>
+
+    <p className="text-[11px] text-[#7182A6]">
+      {[
+        product.store?.address?.area,
+        product.store?.address?.city,
+      ].filter(Boolean).join(", ") || "Location unavailable"}
+    </p>
+
+  </div>
+</div>
+
 
               <div className="rounded-xl border border-slate-100 bg-white p-6">
 

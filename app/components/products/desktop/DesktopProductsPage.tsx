@@ -81,6 +81,9 @@ const [selectedProductId, setSelectedProductId] =
 
     const [userCity, setUserCity] = useState("");
 
+    const [serviceAvailable, setServiceAvailable] = useState(true);
+const [availableStores, setAvailableStores] = useState(0);
+
 
   // ====================================================
   // ACTIVE FILTER
@@ -302,57 +305,78 @@ localStorage.setItem(
   // LOAD TRENDING PRODUCTS
   // ====================================================
 
-  const loadProducts = async (
-    customerAddressId: string
-  ) => {
-    try {
-      setLoading(true);
-      setError("");
+ 
+const loadProducts = async (customerAddressId: string) => {
+  try {
+    setLoading(true);
+    setError("");
+    setProducts([]);
 
-      const response =
-  await getNewArrivalProducts(
-    customerAddressId,
-    1,
-    50
-  );
+    const token = localStorage.getItem("token");
 
-
-      // ----------------------------------------------
-      // TRENDING API RESPONSE
-      //
-      // {
-      //   data: [
-      //      {
-      //        post: {...}
-      //      }
-      //   ]
-      // }
-      // ----------------------------------------------
-
-      const newArrivalProducts =
-  (response?.data || []).filter(
-    (post: any) => post?._id
-  );
-
-setProducts(newArrivalProducts);
-
-    } catch (error: any) {
-      console.error(
-        "GET PRODUCTS ERROR:",
-        error
-      );
-
-      setProducts([]);
-
-      setError(
-        error?.message ||
-          "Unable to load products."
-      );
-
-    } finally {
-      setLoading(false);
+    if (!token) {
+      router.replace("/loginform");
+      return;
     }
-  };
+
+   const response = await fetch(
+  `https://api.thover.in/v2/api/store/nearby-delivery-posts?addressId=${encodeURIComponent(customerAddressId)}`,
+  {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  }
+);
+
+    const contentType =
+      response.headers.get("content-type") || "";
+
+    if (!contentType.includes("application/json")) {
+      throw new Error(
+        "API did not return JSON. Check backend route."
+      );
+    }
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.message || "Failed to load nearby posts."
+      );
+    }
+
+    setServiceAvailable(result.serviceAvailable === true);
+    setAvailableStores(result.availableStores ?? 0);
+
+    if (!result.serviceAvailable) {
+      setProducts([]);
+      return;
+    }
+
+    // Extra protection against deleted images
+    const filteredPosts = (result.posts || []).map(
+      (post: Product) => ({
+        ...post,
+        media: (post.media || []).filter(
+          (image) => image.isDeleted !== true
+        ),
+      })
+    );
+
+    setProducts(filteredPosts);
+
+  } catch (error: any) {
+    console.error("NEARBY POSTS ERROR:", error);
+
+    setError(error.message || "Unable to load posts.");
+    setProducts([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // Reload products whenever Navbar address changes.
 useEffect(() => {
@@ -517,7 +541,9 @@ const handleSearch = async (value: string) => {
 
   // No products served at this address: hide the promo hero.
   const notServiceable =
-    !loading && !error && !search.trim() && products.length === 0;
+  !loading &&
+  !search.trim() &&
+  !serviceAvailable;
 
   return (
     <main className="min-h-screen bg-[#FAFBFF]">
@@ -670,29 +696,41 @@ const handleSearch = async (value: string) => {
 
             </div>
 
-          ) : products.length === 0 ? (
+          ) : !serviceAvailable && !search.trim() ? (
 
-            search.trim() ? (
-              <div className="mt-8 flex min-h-[300px] items-center justify-center rounded-2xl border border-slate-100 bg-white">
-                <div className="text-center">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F4ECFF]">
-                    <ShoppingCart size={28} className="text-[#6D28D9]" />
-                  </div>
-                  <h3 className="mt-4 text-lg font-semibold text-[#101828]">
-                    No products found
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Try searching for another product.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <LocationUnavailable
-                onChangeAddress={() => setShowAddressModal(true)}
-              />
-            )
+  <div className="mt-6">
+    <LocationUnavailable
+      onChangeAddress={() => setShowAddressModal(true)}
+    />
 
-          ) : (
+    <p className="mt-3 text-center text-sm text-slate-500">
+      Our service is not available in your area.
+      {availableStores > 0 &&
+        ` Only ${availableStores} stores found nearby.`}
+    </p>
+  </div>
+
+) : products.length === 0 ? (
+
+  search.trim() ? (
+    <div className="mt-8 flex min-h-[300px] items-center justify-center rounded-2xl border border-slate-100 bg-white">
+      <div className="text-center">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F4ECFF]">
+          <ShoppingCart size={28} className="text-[#6D28D9]" />
+        </div>
+
+        <h3 className="mt-4 text-lg font-semibold text-[#101828]">
+          No products found
+        </h3>
+
+        <p className="mt-1 text-sm text-slate-400">
+          Try searching for another product.
+        </p>
+      </div>
+    </div>
+  ) : null
+
+) : (
 
             <div className="mt-6 grid grid-cols-4 gap-5">
 

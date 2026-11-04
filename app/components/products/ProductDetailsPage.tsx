@@ -1378,7 +1378,7 @@ if (!storeId) {
           className="
             grid
             grid-cols-4
-            gap-2
+            gap-2 bg-slate-50 p-3 rounded-xl
           "
         >
 
@@ -1425,6 +1425,31 @@ if (!storeId) {
           />
 
         </div>
+
+       
+
+        {/* STORE DETAILS */}
+        {product.store && (
+          <div className="mt-3 rounded-xl bg-slate-50 p-3">
+            <p className="text-sm font-semibold text-slate-800">
+              {product.store.storeName || "Store"}
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Store ID: {product.store.storeId || "N/A"}
+            </p>
+
+            <p className="text-xs text-slate-500">
+              Area: {product.store.address?.area || "N/A"}
+            </p>
+
+            <p className="text-xs text-slate-500">
+              City: {product.store.address?.city || "N/A"}
+            </p>
+          </div>
+        )}
+
+      
 
 
         {/* DESCRIPTION */}

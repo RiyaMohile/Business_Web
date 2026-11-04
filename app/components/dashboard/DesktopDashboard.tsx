@@ -13,35 +13,23 @@ export default function DesktopDashboard() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  
 
   const isRegisterPage = pathname === "/register";
   const isOtpPage = pathname === "/otp";
 
   useEffect(() => {
-    try {
-      const token = localStorage.getItem("token");
+  try {
+    const token = localStorage.getItem("token");
 
-      if (token) {
-        router.replace("/products");
-        return;
-      }
-    } catch (error) {
-      console.error("AUTH CHECK ERROR:", error);
+    if (token) {
+      router.replace("/products");
     }
-
-    setCheckingAuth(false);
-  }, [router]);
-
-  if (checkingAuth) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-sm font-medium text-[#6D28D9]">
-          Loading...
-        </p>
-      </main>
-    );
+  } catch (error) {
+    console.error("AUTH CHECK ERROR:", error);
   }
+}, [router]);
+
 
   return (
     <main className="min-h-screen overflow-hidden bg-white">
@@ -168,10 +156,9 @@ export default function DesktopDashboard() {
                 </h2>
 
                 <p className="mt-1 text-[14px] leading-5 text-[#7182A6]">
-                  Get anything you need, Best from local stores
-                  <br />
-                  - all in one place.
-                </p>
+  Discover products from nearby stores and support local
+  businesses. Find what you need, all in one place with Thover.
+</p>
 
               </div>
 

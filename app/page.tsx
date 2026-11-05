@@ -41,6 +41,16 @@ export default function Home() {
     url: "https://thover.in/",
   };
 
+  const orgSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Thover",
+    url: "https://thover.in/",
+    logo: "https://thover.in/logo.png",
+    description:
+      "Thover is a hyperlocal marketplace to discover local stores and shop products near you.",
+  };
+
   return (
     <>
       <script
@@ -48,6 +58,11 @@ export default function Home() {
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(websiteSchema),
         }}
+      />
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
       />
 
       <HomeClient />

@@ -37,25 +37,14 @@ const stats: StatItem[] = [
 export default function ThoverHero() {
   const router = useRouter();
   const [contactOpen, setContactOpen] = useState(false);
-const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-useEffect(() => {
-  const token = localStorage.getItem("token");
-
-  if (token) {
-    router.replace("/products");
-  } else {
-    setIsCheckingAuth(false);
-  }
-}, [router]);
-
-if (isCheckingAuth) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[#160943]">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-300 border-t-transparent" />
-    </div>
-  );
-}
+  // Render the full page immediately so crawlers get real content in the
+  // static HTML. Logged-in users are redirected after mount.
+  useEffect(() => {
+    if (localStorage.getItem("token")) {
+      router.replace("/products");
+    }
+  }, [router]);
 
 const handleLoginClick = () => {
   const token = localStorage.getItem("token");

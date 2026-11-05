@@ -46,22 +46,15 @@ export const metadata: Metadata = {
     title: "Thover – Shop Local Products & Discover Nearby Stores",
     description:
       "Discover local stores, shop products, and explore nearby businesses with Thover.",
-    // images: [
-    //   {
-    //     url: "/og-image.png",
-    //     width: 1200,
-    //     height: 630,
-    //     alt: "Thover – Shop Local",
-    //   },
-    // ],
+    images: [{ url: "/logo.png", alt: "Thover – Shop Local" }],
   },
 
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: "Thover – Shop Local Products",
     description:
       "Discover local stores and products with Thover.",
-    images: ["/og-image.png"],
+    images: ["/logo.png"],
   },
 
   robots: {

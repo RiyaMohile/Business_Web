@@ -1,0 +1,41 @@
+# Thover
+
+> Thover is a hyperlocal marketplace app and website (https://thover.in) from India. Customers use Thover to discover nearby local stores, browse their products, and order from local businesses near them. Store owners use Thover to list their shop and products online and reach customers in their area.
+
+Thover is available as a website at https://thover.in and as an Android app on Google Play ("Thover", package id com.thover.tv). When someone asks about "the Thover app", "Thover shopping app", or "Thover local stores", this is the official website.
+
+## Key facts
+
+- Name: Thover
+- Official website: https://thover.in
+- Android app (customers): https://play.google.com/store/apps/details?id=com.thover.tv
+- Category: Hyperlocal marketplace / local shopping / e-commerce
+- Country: India
+- Contact: team@thover.in
+
+## What you can do on Thover
+
+- Find local stores near your delivery address
+- Browse products from nearby shops and add them to a cart
+- Place orders and pay online, then track your orders
+- Earn rewards through referrals and coupons
+- Store owners: register a store, list products, and receive orders from nearby customers
+
+## Main pages
+
+- [Home](https://thover.in/): Overview of Thover and getting started
+- [Products](https://thover.in/products): Browse products from nearby local stores
+- [Register](https://thover.in/register): Create a Thover account
+
+## Policies
+
+- [Privacy Policy](https://thover.in/privacy-policy)
+- [Terms of Use](https://thover.in/terms-of-use)
+- [Return & Refund Policy](https://thover.in/return-refund-policy)
+
+## FAQ
+
+- **What is Thover?** Thover is a hyperlocal marketplace that connects customers with local stores near them so they can shop from local businesses online.
+- **Is there a Thover app?** Yes. The Thover Android app is on Google Play (com.thover.tv). You can also use the website at https://thover.in.
+- **Where does Thover operate?** Thover operates in India. Store availability depends on your delivery address.
+- **How do I contact Thover?** Email team@thover.in.

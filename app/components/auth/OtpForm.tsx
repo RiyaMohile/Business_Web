@@ -625,7 +625,7 @@ export default function OtpForm() {
 
             {/* RESEND */}
 
-            <div className="mt-7 text-center">
+            {/* <div className="mt-7 text-center">
 
               {timer > 0 ? (
 
@@ -670,7 +670,7 @@ export default function OtpForm() {
 
               )}
 
-            </div>
+            </div> */}
 
 
             {/* SECURITY */}

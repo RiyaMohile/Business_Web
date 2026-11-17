@@ -13,20 +13,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-
 const nunito = Nunito({
   subsets: ["latin"],
   variable: "--font-nunito",
   weight: ["400", "500", "600", "700", "800", "900"],
 });
 
-
-
 export const metadata: Metadata = {
-  metadataBase: new URL("https://thover.in"),
+  metadataBase: new URL("https://thover.in/"),
 
   title: {
-    default: "Thover – Shop Local Products & Discover Nearby Stores",
+    default: "Thover",
     template: "%s | Thover",
   },
 
@@ -35,26 +32,26 @@ export const metadata: Metadata = {
 
   applicationName: "Thover",
 
-  alternates: {
-    canonical: "https://thover.in/",
-  },
-
   openGraph: {
     type: "website",
-    url: "https://thover.in/",
     siteName: "Thover",
-    title: "Thover – Shop Local Products & Discover Nearby Stores",
+    title: "Thover",
     description:
       "Discover local stores, shop products, and explore nearby businesses with Thover.",
-    images: [{ url: "/logo.png", alt: "Thover – Shop Local" }],
+    images: [
+      {
+        url: "/icon.png",
+        alt: "Thover",
+      },
+    ],
   },
 
   twitter: {
     card: "summary",
-    title: "Thover – Shop Local Products",
+    title: "Thover",
     description:
       "Discover local stores and products with Thover.",
-    images: ["/logo.png"],
+    images: ["/icon.png"],
   },
 
   robots: {
@@ -71,7 +68,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${nunito.variable} font-sans  h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${nunito.variable} font-sans h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {children}

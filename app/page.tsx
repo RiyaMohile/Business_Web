@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import HomeClient from "./HomeClient";
+import HomeResponsive from "./HomeResponsive";
 
 export const metadata: Metadata = {
-  title: "Thover – Hyperlocal Marketplace for Local Shopping",
+  title: "Thover",
   description:
     "Thover is a hyperlocal marketplace where you can discover local stores, explore products, and shop from businesses near you.",
 
@@ -12,18 +12,11 @@ export const metadata: Metadata = {
 
   openGraph: {
     type: "website",
-    title: "Thover – Hyperlocal Marketplace",
+    title: "Thover",
     description:
       "Discover local stores, explore products and shop from nearby businesses with Thover.",
     url: "https://thover.in/",
     siteName: "Thover",
-  },
-
-  twitter: {
-    card: "summary",
-    title: "Thover – Hyperlocal Marketplace",
-    description:
-      "Discover local stores and shop products near you with Thover.",
   },
 
   robots: {
@@ -34,12 +27,12 @@ export const metadata: Metadata = {
 
 export default function Home() {
   const websiteSchema = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: "Thover",
-    alternateName: "Thover Marketplace",
-    url: "https://thover.in/",
-  };
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "Thover",
+  alternateName: ["Thover", "thover.in"],
+  url: "https://thover.in/",
+};
 
   const orgSchema = {
     "@context": "https://schema.org",
@@ -47,8 +40,7 @@ export default function Home() {
     name: "Thover",
     url: "https://thover.in/",
     logo: "https://thover.in/logo.png",
-    description:
-      "Thover is a hyperlocal marketplace to discover local stores and shop products near you.",
+    
   };
 
   return (
@@ -65,7 +57,7 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
       />
 
-      <HomeClient />
+      <HomeResponsive />
     </>
   );
 }

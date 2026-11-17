@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter,usePathname  } from "next/navigation";
 
 import {
   Search,
@@ -95,6 +95,7 @@ export default function Navbar({
   onLocationClick,
 }: NavbarProps) {
   const router = useRouter();
+const pathname = usePathname();
 
   // ======================================================
   // ACCOUNT STATES
@@ -147,28 +148,18 @@ const [selectedAddressId, setSelectedAddressId] =
   useState(false);
 
     useEffect(() => {
-  fetchCartCount();
-
-  const savedAddress =
-    localStorage.getItem("selectedAddress");
+  const savedAddress = localStorage.getItem("selectedAddress");
 
   if (savedAddress) {
     try {
-      const address: UserAddress =
-        JSON.parse(savedAddress);
+      const address: UserAddress = JSON.parse(savedAddress);
 
       setSelectedAddress(address);
       setSelectedAddressId(address._id);
       localStorage.setItem("customerAddressId", address._id);
     } catch (error) {
-      console.error(
-        "SAVED ADDRESS PARSE ERROR:",
-        error
-      );
-
-      localStorage.removeItem(
-        "selectedAddress"
-      );
+      console.error("SAVED ADDRESS PARSE ERROR:", error);
+      localStorage.removeItem("selectedAddress");
     }
   }
 }, []);
@@ -376,38 +367,43 @@ useEffect(() => {
       return;
     }
 
-    const storeId = localStorage.getItem("cartStoreId");
+    // Fetch all active carts of logged-in user
+    const response = await getMyCart();
 
-if (!storeId) {
-  setCartCount(0);
-  return;
-}
+    const carts = response?.carts || [];
 
-const response = await getMyCart(storeId);
+    // Calculate total product quantity from all stores
+    const count = carts.reduce(
+      (total: number, cart: any) => {
+        const cartQuantity = (cart.posts || []).reduce(
+          (sum: number, item: any) => {
+            return sum + Number(item.quantity || 0);
+          },
+          0
+        );
 
-const cart = response?.cart;
-
-    if (!cart?.posts) {
-      setCartCount(0);
-      return;
-    }
-
-    const count = cart.posts.reduce(
-      (total: number, item: any) =>
-        total + Number(item.quantity || 0),
+        return total + cartQuantity;
+      },
       0
     );
 
     setCartCount(count);
-  } catch (error) {
+
+    console.log("CART COUNT:", count);
+    console.log("ALL USER CARTS:", carts);
+
+  } catch (error: any) {
     console.error(
-      "FETCH CART ERROR:",
-      error
+      "FETCH CART COUNT ERROR:",
+      error?.response?.data || error.message
     );
 
     setCartCount(0);
   }
 };
+useEffect(() => {
+  fetchCartCount();
+}, [pathname]);
 
 const fetchAddresses = async () => {
   try {

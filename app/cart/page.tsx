@@ -64,101 +64,62 @@ const [selectedStoreId, setSelectedStoreId] =
   // FETCH CART
   // ==========================================
 
-  const fetchCart = async () => {
+// ==========================================
+// FETCH CART
+// ==========================================
+
+const fetchCart = async () => {
   try {
     setLoading(true);
 
-    const storedStoreIds = JSON.parse(
-      localStorage.getItem("cartStoreIds") || "[]"
-    );
+    const token = localStorage.getItem("token");
 
-    if (
-      !Array.isArray(storedStoreIds) ||
-      storedStoreIds.length === 0
-    ) {
-      console.log("NO CART STORE IDS FOUND");
-
+    if (!token) {
       setCarts([]);
       setSelectedStoreId(null);
-
       return;
     }
 
-    console.log(
-      "CART STORE IDS:",
-      storedStoreIds
-    );
+    const response = await getMyCart();
 
-    const responses = await Promise.all(
-      storedStoreIds.map(async (storeId: string) => {
-        try {
-          const response = await getMyCart(storeId);
-
-          console.log(
-            "CART RESPONSE:",
-            storeId,
-            response
-          );
-
-          return response?.cart || null;
-        } catch (error) {
-          console.error(
-            "STORE CART ERROR:",
-            storeId,
-            error
-          );
-
-          return null;
-        }
-      })
-    );
-
-    // Only carts having products
-    const validCarts = responses.filter(
-      (cart): cart is Cart =>
-        Boolean(
-          cart &&
-          Array.isArray(cart.posts) &&
+    if (response?.success) {
+      // Empty carts aur deleted store references hatao
+      const validCarts = (response.carts || []).filter(
+        (cart: Cart) =>
+          cart.storeId &&
+          cart.posts &&
           cart.posts.length > 0
-        )
-    );
+      );
 
-    console.log(
-      "ALL STORE CARTS:",
-      validCarts
-    );
+      setCarts(validCarts);
 
-    setCarts(validCarts);
-
-    // Select first store initially
-    // Select first available store
-if (validCarts.length > 0) {
-  setSelectedStoreId(
-    getStoreKey(validCarts[0].storeId)
-  );
-} else {
-  setSelectedStoreId(null);
-}
-
+      // Automatically first available store select karo
+      if (validCarts.length > 0) {
+        setSelectedStoreId(
+          getStoreKey(validCarts[0].storeId)
+        );
+      } else {
+        setSelectedStoreId(null);
+      }
+    } else {
+      setCarts([]);
+      setSelectedStoreId(null);
+    }
   } catch (error: any) {
     console.error(
       "FETCH CART ERROR:",
-      error
+      error?.response?.data || error.message
     );
 
-    if (
-      error?.response?.status === 401 ||
-      error?.response?.status === 403
-    ) {
-      router.push("/login");
-    }
-
+    setCarts([]);
+    setSelectedStoreId(null);
   } finally {
+    // IMPORTANT: Loading always stop hoga
     setLoading(false);
   }
 };
 
- useEffect(() => {
+useEffect(() => {
   fetchCart();
 }, []);
 

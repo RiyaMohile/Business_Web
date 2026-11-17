@@ -506,7 +506,7 @@ export default function Otp() {
             RESEND
         ==================================== */}
 
-        <div className="mt-6 text-center">
+        {/* <div className="mt-6 text-center">
 
           {timer > 0 ? (
             <p className="text-sm text-[#7182A6]">
@@ -541,7 +541,7 @@ export default function Otp() {
             </button>
           )}
 
-        </div>
+        </div> */}
 
 
         {/* ====================================

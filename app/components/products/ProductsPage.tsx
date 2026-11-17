@@ -3,10 +3,6 @@
 import { useEffect, useState } from "react";
 import {
   Loader2,
-  Search,
-  User,
-  X,
-  LogOut, MapPin,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 

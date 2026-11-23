@@ -90,8 +90,14 @@ export const resendOTPRequest = async (
 export const getUserDetails = async (
   userId: string
 ) => {
+  // The backend now requires login for this route (and returns the full
+  // profile only to the account owner), so send the user's token.
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
   const { data } = await api.get(
-    `/user/details/${userId}`
+    `/user/details/${userId}`,
+    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
   );
 
   return data;
